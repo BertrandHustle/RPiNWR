@@ -15,8 +15,6 @@ __author__ = 'ke4roh'
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-
 from math import ceil
 import random
 import unittest
@@ -423,4 +421,3 @@ class TestSAME(unittest.TestCase):
         bitsfalse.reverse()
         self.assertEqual((2, 'L'), SAME._reconcile_character(bitstrue, bitsfalse,
                                                              'ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
-

@@ -35,6 +35,7 @@ _ORIGINATORS = [
     ("National Weather Service", "WXR"),
     ("Primary Entry Point System", "PEP")
 ]
+
 _ORIGINATOR_CODES = tuple([x[1] for x in _ORIGINATORS])
 
 _EVENT_TYPES = [
@@ -111,6 +112,7 @@ def _reconcile_character(bitstrue, bitsfalse, pattern):
     :return: confidence, char - a tuple with confidence and the character
     """
     if sum(bitstrue) == 0 and len(pattern) > 1:  # only nulls received, more than 1 possibility
+        #returns a ⨀
         return 0, chr(0)
     near = []
     for t in list(pattern):
@@ -280,6 +282,31 @@ def average_message(headers, transmitter):
     bitsfalse = [0] * 8 * size
     confidences = [0] * size
 
+    # print tests
+    print(size, '\n', bitstrue, '\n', bitsfalse)
+    print(headers)
+    print(transmitter)
+
+    return_msg = []
+
+    # -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
+
+    '''
+    for (msg, c, when) in headers:
+
+        split_msg = msg.split('-')
+        print(split_msg)
+
+        originator_code = split_msg[0]
+
+        if originator_code in _ORIGINATOR_CODES:
+            return_msg.append('-'+originator_code)
+        else:
+    '''
+
+
+
+
     # First look through the messages and compute sums of confidence of bit values
     for (msg, c, when) in headers:
         if type(c) is str:
@@ -287,14 +314,37 @@ def average_message(headers, transmitter):
         else:
             confidence = c
         # Loop through the characters of the message
+        # TODO: change this to split on delimiter
         for i in range(0, len(msg)):
             if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
                 # Loop through bits and apply confidence for true or false
                 for j in range(0, 8):
+                    # print test
+                    print(ord(msg[i]))
+                    print(bin(ord(msg[i])))
+                    print(msg[i])
+                    # if the last bit (e.g. 00001) is a 1:
+                    # TODO: this could be improved: since a true bit in bitstrue is ALWAYS a 0 in bitsfalse, why not just create bitsfalse by mirroring bitstrue?
+
+                    '''
+                    e.g.
+                    00999900090
+                    99000099909
+
+                    we'd run into problems when we changed numbers, e.g.
+                    009|80
+                    990|08
+                    '''
+
+
                     if (ord(msg[i]) >> j) & 1:
+                        # then add it to the bitstrue (or bitsfalse) bits with that bit's confidence level
                         bitstrue[(i << 3) + j] += 1 * confidence[i]
                     else:
                         bitsfalse[(i << 3) + j] += 1 * confidence[i]
+
+    print(bitstrue)
+    print(bitsfalse)
 
     # Then combine that information into a single aggregate message
     avgmsg = []
