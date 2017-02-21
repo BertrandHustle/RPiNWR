@@ -348,6 +348,24 @@ def check_if_valid_code(codes, valid_list):
         else:
             code_list.append(c)
 
+# attempts to construct a valid character from headers if character is ambiguous
+
+
+def construct_character(bitstrue, bitsfalse, confidences):
+    char = ''
+    byte_pattern_index = 0
+    for i in range(0, size):
+        # Assemble a character from the various bits
+        c = 0
+        confidences[i] = 0
+        for j in range(0, 8):
+            bit_weight = (bitstrue[(i << 3) + j] - bitsfalse[(i << 3) + j])
+            c |= (bit_weight > 0) << j
+            confidences[i] += abs(bit_weight)
+        if c == 0:
+            confidences[i] = 0
+        avgmsg.append(chr(c))
+
 
 def average_message(headers, transmitter):
     """
@@ -387,10 +405,12 @@ def average_message(headers, transmitter):
     # otherwise, we try to construct a valid org code
     else:
         for h in headers:
+            # TODO: fix this so it adds to the bits, this will just redefine them
             confidence_bits = sum_confidence(header)
             bitstrue = confidence_bits[0]
             bitsfalse = confidence_bits[1]
             confidences = confidence_bits[2]
+
 
     '''
     # First look through the messages and compute sums of confidence of bit values
@@ -424,6 +444,9 @@ def average_message(headers, transmitter):
             bit_weight = (bitstrue[(i << 3) + j] - bitsfalse[(i << 3) + j])
             c |= (bit_weight > 0) << j
             confidences[i] += abs(bit_weight)
+            print(bit_weight)
+            print(confidences[i])
+            print(chr(c))
         if c == 0:
             confidences[i] = 0
         avgmsg.append(chr(c))

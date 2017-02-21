@@ -431,3 +431,10 @@ class TestSAME(unittest.TestCase):
         test_codes = ['WXR', 'W^X', 'WXR']
         test_valid_list = SAME._ORIGINATOR_CODES
         self.assertTrue(SAME.check_if_valid_code(test_codes, test_valid_list))
+
+    def test_construct_character(self):
+        expected_char = 'A'
+        test_bitstrue = []
+        test_bitsfalse = []
+        test_confidences = []
+        self.assertEqual(SAME.construct_character(test_bitstrue, test_bitsfalse, test_confidences), expected_char)
