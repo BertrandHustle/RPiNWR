@@ -421,3 +421,8 @@ class TestSAME(unittest.TestCase):
         bitsfalse.reverse()
         self.assertEqual((2, 'L'), SAME._reconcile_character(bitstrue, bitsfalse,
                                                              'ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
+
+    def test_split_message(self):
+        test_msg = "-WXR-SVR-037085-037101+0100-1250218-KRAH/NWS-"
+        expected_list = ['WXR', 'SVR', ['037085', '037101'], '0100', '1250218', 'KRAH/NWS']
+        self.assertEqual(SAME.split_message(test_msg), expected_list)

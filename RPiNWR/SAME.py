@@ -259,6 +259,83 @@ def _truncate(avgmsg, confidences):
     return avgmsg, confidences
 
 
+# takes headers and computes sums of confidence of bit values
+def sum_confidence(header):
+
+    # init
+
+    # size of message
+    size = max([len(x[0]) for x in header])
+    bitstrue = [0] * 8 * size
+    bitsfalse = [0] * 8 * size
+
+    # summed confidences
+    confidences = [0] * size
+
+    # msg == message
+    # c == confidence
+    # when == time stamp (after the epoch)
+    for (msg, c, when) in header:
+        # convert to int if c is a string
+        if type(c) is str:
+            confidence = [int(x) for x in c]
+        # otherwise leave it as a list of ints
+        else:
+            confidence = c
+        # Loop through the characters of the message
+        # TODO: change this to split on delimiter
+        for i in range(0, len(msg)):
+            if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
+                # Loop through bits and apply confidence for true or false
+                for j in range(0, 8):
+                    # TODO: this could be improved: since a true bit in bitstrue is ALWAYS a 0 in bitsfalse, why not just create bitsfalse by mirroring bitstrue?
+
+                    '''
+                    e.g.
+                    00999900090
+                    99000099909
+
+                    we'd run into problems when we changed numbers, e.g.
+                    009|80
+                    990|08
+                    '''
+                    # if the last bit (e.g. 00001) is a 1:
+                    if (ord(msg[i]) >> j) & 1:
+                        # then add it to the bitstrue (or bitsfalse) bits with that bit's confidence level
+                        bitstrue[(i << 3) + j] += 1 * confidence[i]
+                    else:
+                        bitsfalse[(i << 3) + j] += 1 * confidence[i]
+
+    return bitstrue, bitsfalse, confidences
+
+
+# split message into component parts according to SAME protocol
+def split_message(message):
+    # -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
+    # -<Originator>-<Event>-<Locations>-<Purge Time>-<Timestamp>-<Call Sign>
+
+    # this is the final list of split of message parts that we return
+    message_parts = []
+
+    # start splitting!
+    # separate before/after location codes
+    plus_split = message.split('+')
+    # split up to (and including) location codes
+    first_half_split = plus_split[0].split('-')
+    # everything after location codes
+    second_half_split = plus_split[1].split('-')
+
+    originator_code = (first_half_split[1])
+    event_code = (first_half_split[2])
+    location_codes = []
+    for i in range(3, len(first_half_split)):
+        location_codes.append(first_half_split[i])
+    purge_time = (second_half_split[0])
+    exact_time = (second_half_split[1])
+    callsign = (second_half_split[2])
+
+    return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
+
 def average_message(headers, transmitter):
     """
     Compute the correct message by averaging headers, restricting input to the valid character set, and filling
@@ -282,14 +359,14 @@ def average_message(headers, transmitter):
     bitsfalse = [0] * 8 * size
     confidences = [0] * size
 
-    # print tests
-    print(size, '\n', bitstrue, '\n', bitsfalse)
-    print(headers)
-    print(transmitter)
 
-    return_msg = []
+    # final message to return
+    final_msg = ''
 
-    # -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
+    # First, split the message into its component parts
+
+
+
 
     '''
     for (msg, c, when) in headers:
@@ -303,9 +380,6 @@ def average_message(headers, transmitter):
             return_msg.append('-'+originator_code)
         else:
     '''
-
-
-
 
     # First look through the messages and compute sums of confidence of bit values
     for (msg, c, when) in headers:

@@ -18,4 +18,3 @@ __author__ = 'ke4roh'
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from RPiNWR.Si4707 import Si4707
-
