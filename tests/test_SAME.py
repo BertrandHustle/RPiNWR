@@ -426,3 +426,8 @@ class TestSAME(unittest.TestCase):
         test_msg = "-WXR-SVR-037085-037101+0100-1250218-KRAH/NWS-"
         expected_list = ['WXR', 'SVR', ['037085', '037101'], '0100', '1250218', 'KRAH/NWS']
         self.assertEqual(SAME.split_message(test_msg), expected_list)
+
+    def test_check_if_valid_code(self):
+        test_codes = ['WXR', 'W^X', 'WXR']
+        test_valid_list = SAME._ORIGINATOR_CODES
+        self.assertTrue(SAME.check_if_valid_code(test_codes, test_valid_list))

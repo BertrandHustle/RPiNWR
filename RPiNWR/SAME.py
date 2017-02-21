@@ -262,8 +262,6 @@ def _truncate(avgmsg, confidences):
 # takes headers and computes sums of confidence of bit values
 def sum_confidence(header):
 
-    # init
-
     # size of message
     size = max([len(x[0]) for x in header])
     bitstrue = [0] * 8 * size
@@ -283,7 +281,6 @@ def sum_confidence(header):
         else:
             confidence = c
         # Loop through the characters of the message
-        # TODO: change this to split on delimiter
         for i in range(0, len(msg)):
             if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
                 # Loop through bits and apply confidence for true or false
@@ -305,7 +302,8 @@ def sum_confidence(header):
                         bitstrue[(i << 3) + j] += 1 * confidence[i]
                     else:
                         bitsfalse[(i << 3) + j] += 1 * confidence[i]
-
+    print(bitstrue)
+    print(bitsfalse)
     return bitstrue, bitsfalse, confidences
 
 
@@ -336,6 +334,21 @@ def split_message(message):
 
     return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
 
+# takes a list of codes and a list of valid codes, and checks to make sure most of the codes correspond to a valid list
+# e.g. if we have a list of ['WXR', 'W^X', 'WXR'] we should get the result that this is a valid originator code
+
+
+def check_if_valid_code(codes, valid_list):
+    code_list = []
+    # Check if we have two matching and valid codes
+    for c in codes:
+        # if it's already in code_list we know 2 out of 3 of the codes are the same
+        if c in valid_list and c in code_list:
+            return c
+        else:
+            code_list.append(c)
+
+
 def average_message(headers, transmitter):
     """
     Compute the correct message by averaging headers, restricting input to the valid character set, and filling
@@ -359,28 +372,27 @@ def average_message(headers, transmitter):
     bitsfalse = [0] * 8 * size
     confidences = [0] * size
 
-
     # final message to return
     final_msg = ''
+    org_codes = []
 
-    # First, split the message into its component parts
-
-
-
-
-    '''
+    # First, check if we have two matching, valid originator codes
     for (msg, c, when) in headers:
+        split_msg = split_message(msg)
+        org_codes.append(split_msg[0])
+    valid_code = check_if_valid_code(org_codes, _ORIGINATOR_CODES)
+    # if we have a non-ambiguous valid org code, add it to the final message
+    if valid_code:
+        final_msg += '-' + valid_code
+    # otherwise, we try to construct a valid org code
+    else:
+        for h in headers:
+            confidence_bits = sum_confidence(header)
+            bitstrue = confidence_bits[0]
+            bitsfalse = confidence_bits[1]
+            confidences = confidence_bits[2]
 
-        split_msg = msg.split('-')
-        print(split_msg)
-
-        originator_code = split_msg[0]
-
-        if originator_code in _ORIGINATOR_CODES:
-            return_msg.append('-'+originator_code)
-        else:
     '''
-
     # First look through the messages and compute sums of confidence of bit values
     for (msg, c, when) in headers:
         if type(c) is str:
@@ -393,32 +405,13 @@ def average_message(headers, transmitter):
             if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
                 # Loop through bits and apply confidence for true or false
                 for j in range(0, 8):
-                    # print test
-                    print(ord(msg[i]))
-                    print(bin(ord(msg[i])))
-                    print(msg[i])
                     # if the last bit (e.g. 00001) is a 1:
-                    # TODO: this could be improved: since a true bit in bitstrue is ALWAYS a 0 in bitsfalse, why not just create bitsfalse by mirroring bitstrue?
-
-                    '''
-                    e.g.
-                    00999900090
-                    99000099909
-
-                    we'd run into problems when we changed numbers, e.g.
-                    009|80
-                    990|08
-                    '''
-
-
                     if (ord(msg[i]) >> j) & 1:
                         # then add it to the bitstrue (or bitsfalse) bits with that bit's confidence level
                         bitstrue[(i << 3) + j] += 1 * confidence[i]
                     else:
                         bitsfalse[(i << 3) + j] += 1 * confidence[i]
-
-    print(bitstrue)
-    print(bitsfalse)
+    '''
 
     # Then combine that information into a single aggregate message
     avgmsg = []
