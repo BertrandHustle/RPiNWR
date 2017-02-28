@@ -413,7 +413,7 @@ class TestSAME(unittest.TestCase):
         # D = 0100 0100
         # L = 0100 1100
         # M = 0100 1101
-        # and reconciling these 3 with equal weights should yeild L
+        # and reconciling these 3 with equal weights should yield L
         # Easier to write with MSB first, then reverse
         bitstrue = [0, 3, 0, 0, 2, 3, 0, 1]
         bitsfalse = [3, 0, 3, 3, 1, 0, 3, 2]
@@ -432,9 +432,27 @@ class TestSAME(unittest.TestCase):
         test_valid_list = SAME._ORIGINATOR_CODES
         self.assertTrue(SAME.check_if_valid_code(test_codes, test_valid_list))
 
-    def test_construct_character(self):
-        expected_char = 'A'
-        test_bitstrue = []
-        test_bitsfalse = []
-        test_confidences = []
-        self.assertEqual(SAME.construct_character(test_bitstrue, test_bitsfalse, test_confidences), expected_char)
+    def test_add_bits(self):
+        to_list = [0, 0, 0, 0, 0]
+        from_list = [1, 1, 0, 1, 1]
+        self.assertTrue(SAME.add_bits(to_list, from_list), from_list)
+
+    def test_test_code(self):
+        avg_test_messages = [
+            (
+                '-W⨀R-RWT-0⨀7001-03⨀037-037⨀63-0370⨀9-03707⨀-037085⨀037101-⨀37105-0⨀7125-03⨀135-037⨀45-0371⨀1-03718⨀-037183⨀037185+⨀600-118⨀503-KRA⨀/NWS-⨀⨀⨀ỶỂ␝Iỹ',
+                '233232233333333233333323333333333333333333333233333333333333333333333333333333333333233333233333333233333323333323333333333233333233333333300000',
+                '1235884.231'
+            ),
+            (
+                '-W⨀R-RWT-0⨀7001-03⨀037-037⨀63-0370⨀9-03707⨀-037085⨀037101-⨀37105-0⨀7125-03⨀135-037⨀45-0371⨀1-03718⨀-037183⨀037185+⨀600-118⨀503-KRA⨀/NWS-⨀⨀⨀Ẵ␂␑IX',
+                '333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333300000',
+                '1235884.231'
+            ),
+            (
+                '-W⨀R-RWT-0⨀7001-03⨀037-037⨀63-0370⨀9-03707⨀-037085⨀037101-⨀37105-0⨀7125-03⨀135-037⨀45-0371⨀1-03718⨀-037183⨀037185+⨀600-118⨀503-KRA⨀/NWS-⨀⨀⨀0⨀␑IP',
+                '333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333300000',
+                '1235884.231'
+            )]
+        expected_code = 'WXR'
+        self.assertEqual(SAME.test_code(avg_test_messages), expected_code)

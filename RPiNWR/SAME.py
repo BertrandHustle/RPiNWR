@@ -273,6 +273,7 @@ def sum_confidence(header):
     # msg == message
     # c == confidence
     # when == time stamp (after the epoch)
+    # TODO: why is this line not working in tests?
     for (msg, c, when) in header:
         # convert to int if c is a string
         if type(c) is str:
@@ -351,9 +352,7 @@ def check_if_valid_code(codes, valid_list):
 # attempts to construct a valid character from headers if character is ambiguous
 
 
-def construct_character(bitstrue, bitsfalse, confidences):
-    char = ''
-    byte_pattern_index = 0
+def construct_character(bitstrue, bitsfalse, confidences, size):
     for i in range(0, size):
         # Assemble a character from the various bits
         c = 0
@@ -364,7 +363,49 @@ def construct_character(bitstrue, bitsfalse, confidences):
             confidences[i] += abs(bit_weight)
         if c == 0:
             confidences[i] = 0
-        avgmsg.append(chr(c))
+        return chr(c)
+
+# :param to_list: the list we are adding bits to
+# :param from_list: the list we are taking bits from
+
+
+def add_bits(to_list, from_list):
+    count = 0
+    for i in from_list:
+        to_list[count] += i
+        count += 1
+    return to_list
+
+
+def test_code(headers):
+    size = max([len(x[0]) for x in headers])
+    bitstrue = [0] * 8 * size
+    bitsfalse = [0] * 8 * size
+    confidences = [0] * size
+
+    # final message to return
+    final_msg = ''
+    org_codes = []
+
+    # First, check if we have two matching, valid originator codes
+    for (msg, c, when) in headers:
+        split_msg = split_message(msg)
+        org_codes.append(split_msg[0])
+    valid_code = check_if_valid_code(org_codes, _ORIGINATOR_CODES)
+    # if we have a non-ambiguous valid org code, add it to the final message
+    if valid_code:
+        final_msg += '-' + valid_code
+    # otherwise, we try to construct a valid org code
+    else:
+        possible_code = ''
+        for h in headers:
+            confidence_bits = sum_confidence(h)
+            add_bits(bitstrue, confidence_bits[0])
+            add_bits(bitsfalse, confidence_bits[1])
+            add_bits(confidences, confidence_bits[2])
+        possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
+        print(possible_code)
+        return possible_code
 
 
 def average_message(headers, transmitter):
@@ -404,14 +445,14 @@ def average_message(headers, transmitter):
         final_msg += '-' + valid_code
     # otherwise, we try to construct a valid org code
     else:
+        possible_char = ''
         for h in headers:
-            # TODO: fix this so it adds to the bits, this will just redefine them
-            confidence_bits = sum_confidence(header)
-            bitstrue = confidence_bits[0]
-            bitsfalse = confidence_bits[1]
-            confidences = confidence_bits[2]
-
-
+            confidence_bits = sum_confidence(h)
+            add_bits(bitstrue, confidence_bits[0])
+            add_bits(bitsfalse, confidence_bits[1])
+            add_bits(confidences, confidence_bits[2])
+        possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
+        print(possible_char)
     '''
     # First look through the messages and compute sums of confidence of bit values
     for (msg, c, when) in headers:
