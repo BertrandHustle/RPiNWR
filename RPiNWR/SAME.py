@@ -260,6 +260,7 @@ def _truncate(avgmsg, confidences):
 
 
 # takes headers and computes sums of confidence of bit values
+# TODO: rename this
 def sum_confidence(header):
 
     # size of message
@@ -308,6 +309,17 @@ def sum_confidence(header):
     return bitstrue, bitsfalse, confidences
 
 
+# convert string to bitstrue, bitsfalse, and confidences
+def sum_bits(string):
+    # size of message
+    size = len(string)
+    bitstrue = [0] * 8 * size
+    bitsfalse = [0] * 8 * size
+    confidences = [0] * size
+
+    
+
+
 # split message into component parts according to SAME protocol
 def split_message(message):
     # -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
@@ -318,22 +330,23 @@ def split_message(message):
 
     # start splitting!
     # separate before/after location codes
+    # TODO: fix this in case the '+' comes in wrong (e.g. as a '%')
     plus_split = message.split('+')
-    # split up to (and including) location codes
-    first_half_split = plus_split[0].split('-')
-    # everything after location codes
-    second_half_split = plus_split[1].split('-')
+    if len(plus_split) == 2:
+        # split up to (and including) location codes
+        first_half_split = plus_split[0].split('-')
+        # everything after location codes
+        second_half_split = plus_split[1].split('-')
+        originator_code = (first_half_split[1])
+        event_code = (first_half_split[2])
+        location_codes = []
+        for i in range(3, len(first_half_split)):
+            location_codes.append(first_half_split[i])
+        purge_time = (second_half_split[0])
+        exact_time = (second_half_split[1])
+        callsign = (second_half_split[2])
 
-    originator_code = (first_half_split[1])
-    event_code = (first_half_split[2])
-    location_codes = []
-    for i in range(3, len(first_half_split)):
-        location_codes.append(first_half_split[i])
-    purge_time = (second_half_split[0])
-    exact_time = (second_half_split[1])
-    callsign = (second_half_split[2])
-
-    return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
+        return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
 
 # takes a list of codes and a list of valid codes, and checks to make sure most of the codes correspond to a valid list
 # e.g. if we have a list of ['WXR', 'W^X', 'WXR'] we should get the result that this is a valid originator code
@@ -349,21 +362,11 @@ def check_if_valid_code(codes, valid_list):
         else:
             code_list.append(c)
 
-# attempts to construct a valid character from headers if character is ambiguous
 
+def reconcile_code(code_list):
+    for code in code_list:
+        for char in code:
 
-def construct_character(bitstrue, bitsfalse, confidences, size):
-    for i in range(0, size):
-        # Assemble a character from the various bits
-        c = 0
-        confidences[i] = 0
-        for j in range(0, 8):
-            bit_weight = (bitstrue[(i << 3) + j] - bitsfalse[(i << 3) + j])
-            c |= (bit_weight > 0) << j
-            confidences[i] += abs(bit_weight)
-        if c == 0:
-            confidences[i] = 0
-        return chr(c)
 
 # :param to_list: the list we are adding bits to
 # :param from_list: the list we are taking bits from
@@ -375,37 +378,6 @@ def add_bits(to_list, from_list):
         to_list[count] += i
         count += 1
     return to_list
-
-
-def test_code(headers):
-    size = max([len(x[0]) for x in headers])
-    bitstrue = [0] * 8 * size
-    bitsfalse = [0] * 8 * size
-    confidences = [0] * size
-
-    # final message to return
-    final_msg = ''
-    org_codes = []
-
-    # First, check if we have two matching, valid originator codes
-    for (msg, c, when) in headers:
-        split_msg = split_message(msg)
-        org_codes.append(split_msg[0])
-    valid_code = check_if_valid_code(org_codes, _ORIGINATOR_CODES)
-    # if we have a non-ambiguous valid org code, add it to the final message
-    if valid_code:
-        final_msg += '-' + valid_code
-    # otherwise, we try to construct a valid org code
-    else:
-        possible_code = ''
-        for h in headers:
-            confidence_bits = sum_confidence(h)
-            add_bits(bitstrue, confidence_bits[0])
-            add_bits(bitsfalse, confidence_bits[1])
-            add_bits(confidences, confidence_bits[2])
-        possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
-        print(possible_code)
-        return possible_code
 
 
 def average_message(headers, transmitter):
@@ -453,6 +425,7 @@ def average_message(headers, transmitter):
             add_bits(confidences, confidence_bits[2])
         possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
         print(possible_char)
+
     '''
     # First look through the messages and compute sums of confidence of bit values
     for (msg, c, when) in headers:
@@ -478,6 +451,7 @@ def average_message(headers, transmitter):
     avgmsg = []
     byte_pattern_index = 0
     for i in range(0, size):
+        # TODO: why is this not using _reconcile_character()?
         # Assemble a character from the various bits
         c = 0
         confidences[i] = 0

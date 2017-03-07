@@ -423,14 +423,17 @@ class TestSAME(unittest.TestCase):
                                                              'ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
 
     def test_split_message(self):
-        test_msg = "-WXR-SVR-037085-037101+0100-1250218-KRAH/NWS-"
+        test_msg = '-WXR-SVR-037085-037101+0100-1250218-KRAH/NWS-'
+        test_msg_2 = '-WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\\'ÎWS-'
         expected_list = ['WXR', 'SVR', ['037085', '037101'], '0100', '1250218', 'KRAH/NWS']
         self.assertEqual(SAME.split_message(test_msg), expected_list)
 
     def test_check_if_valid_code(self):
         test_codes = ['WXR', 'W^X', 'WXR']
+        test_codes_2 = ['&%$', 'T5+', 'XXX']
         test_valid_list = SAME._ORIGINATOR_CODES
         self.assertTrue(SAME.check_if_valid_code(test_codes, test_valid_list))
+        self.assertFalse(SAME.check_if_valid_code(test_codes_2, test_valid_list))
 
     def test_add_bits(self):
         to_list = [0, 0, 0, 0, 0]
