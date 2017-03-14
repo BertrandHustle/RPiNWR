@@ -112,14 +112,14 @@ class TestSAME(unittest.TestCase):
             TestSAME.add_noise(clear_message, noise)
         ], msg_time)
 
-    def testAverageMessage(self):
+    def test_average_message(self):
         clear_message, messages = self.make_noisy_messages(.03)
         (msg, confidence) = average_message(messages, "KID77")
         self.assertEqual(clear_message, msg)
         self.assertEqual(3, min(confidence))
         self.assertEqual(9, max(confidence))
 
-    def testAverageMessageOfJunkHasLowConfidence(self):
+    def test_average_message_of_junk_has_low_confidence(self):
         clear_message, messages = self.make_noisy_messages(.05)
         (msg, confidence) = average_message(messages, "KID77")
         for i in range(0, len(clear_message)):
@@ -200,11 +200,11 @@ class TestSAME(unittest.TestCase):
 
             msg["calculated"] = (msg["calculated"][0], "".join([str(x) for x in msg["calculated"][1]]))
 
-        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "dirty_messages_1.json"), "w") as f:
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "dirty_messages_1.json"), "w", encoding='UTF-8') as f:
             json.dump(messages, f, indent=4, sort_keys=True, ensure_ascii=False)
 
     def load_dirty_messages(self):
-        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "dirty_messages.json"), "r") as f:
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "dirty_messages.json"), "r", encoding='UTF-8') as f:
             messages = json.load(f)
         return messages
 
@@ -426,7 +426,10 @@ class TestSAME(unittest.TestCase):
         test_msg = '-WXR-SVR-037085-037101+0100-1250218-KRAH/NWS-'
         test_msg_2 = '-WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\\'ÎWS-'
         expected_list = ['WXR', 'SVR', ['037085', '037101'], '0100', '1250218', 'KRAH/NWS']
+        expected_list_2 = ['WXR', 'RWT', ['020103', '020209', '020091', '°20121', '029047', '029165%029095', '029037',], '0030', '3031710', 'KEAX', 'ÎWS']
+        print(SAME.split_message(test_msg_2))
         self.assertEqual(SAME.split_message(test_msg), expected_list)
+        self.assertEqual(SAME.split_message(test_msg_2), expected_list_2)
 
     def test_check_if_valid_code(self):
         test_codes = ['WXR', 'W^X', 'WXR']

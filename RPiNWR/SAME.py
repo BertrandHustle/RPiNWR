@@ -317,36 +317,69 @@ def sum_bits(string):
     bitsfalse = [0] * 8 * size
     confidences = [0] * size
 
-    
-
 
 # split message into component parts according to SAME protocol
-def split_message(message):
-    # -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
-    # -<Originator>-<Event>-<Locations>-<Purge Time>-<Timestamp>-<Call Sign>
+# EXAMPLE:
+# format: -<Originator>-<Event>-<Locations>-<Purge Time>-<Timestamp>-<Call Sign>
+# clean message: -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
+# dirty message: -WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\'ÎWS-
 
-    # this is the final list of split of message parts that we return
-    message_parts = []
+# regex patterns:
+# TODO: add these to the init section at the top of this file
+
+def split_message(message):
+
+    # init
+    # this is what we want to use to initially split up the message, we expect this to be a '+'
+    main_delimiter = ''
+    originator_code = (first_half_split[1])
+    event_code = (first_half_split[2])
+    location_codes = []
+    for i in range(3, len(first_half_split)):
+        location_codes.append(first_half_split[i])
+    purge_time = (second_half_split[0])
+    exact_time = (second_half_split[1])
+    callsign = (second_half_split[2])
 
     # start splitting!
     # separate before/after location codes
-    # TODO: fix this in case the '+' comes in wrong (e.g. as a '%')
-    plus_split = message.split('+')
-    if len(plus_split) == 2:
+    if '+' not in message:
+        # look for the purge time and return the character before it
+        # because we know the purge time has to be 4 digits,
+        # the character before it must be our main delimiter (the '+')
+        purge_time_regex_search = re.findall('\D[0-9]{4}\D', message)
+        if purge_time_regex_search:
+            main_delimiter = purge_time_regex_search[0][0]
+        else:
+            print('MAIN DELIMITER NOT FOUND')
+    else:
+        main_delimiter = '+'
+
+    main_delimiter_split = message.split(main_delimiter)
+
+    if len(main_delimiter_split) == 2:
         # split up to (and including) location codes
-        first_half_split = plus_split[0].split('-')
+        first_half_split = main_delimiter_split[0].split('-')
         # everything after location codes
-        second_half_split = plus_split[1].split('-')
+        second_half_split = main_delimiter_split[1].split('-')
+        # 0030-3031710,KEAX\\'ÎWS-
+
+        # check to make sure we're getting the formats we expect for individual chunks of the message
+        # then add to our set of return values
+
+        # first half:
         originator_code = (first_half_split[1])
         event_code = (first_half_split[2])
         location_codes = []
         for i in range(3, len(first_half_split)):
             location_codes.append(first_half_split[i])
+
+        # second half:
         purge_time = (second_half_split[0])
         exact_time = (second_half_split[1])
         callsign = (second_half_split[2])
 
-        return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
+    return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
 
 # takes a list of codes and a list of valid codes, and checks to make sure most of the codes correspond to a valid list
 # e.g. if we have a list of ['WXR', 'W^X', 'WXR'] we should get the result that this is a valid originator code
@@ -361,11 +394,6 @@ def check_if_valid_code(codes, valid_list):
             return c
         else:
             code_list.append(c)
-
-
-def reconcile_code(code_list):
-    for code in code_list:
-        for char in code:
 
 
 # :param to_list: the list we are adding bits to
@@ -407,9 +435,11 @@ def average_message(headers, transmitter):
     final_msg = ''
     org_codes = []
 
+    '''
     # First, check if we have two matching, valid originator codes
     for (msg, c, when) in headers:
         split_msg = split_message(msg)
+        # TODO: on testAverageMessage we have a problem: the main delimiter ('+') is interpreted as a ';'.  This needs to be our first line of attack
         org_codes.append(split_msg[0])
     valid_code = check_if_valid_code(org_codes, _ORIGINATOR_CODES)
     # if we have a non-ambiguous valid org code, add it to the final message
@@ -425,8 +455,8 @@ def average_message(headers, transmitter):
             add_bits(confidences, confidence_bits[2])
         possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
         print(possible_char)
-
     '''
+
     # First look through the messages and compute sums of confidence of bit values
     for (msg, c, when) in headers:
         if type(c) is str:
@@ -445,7 +475,7 @@ def average_message(headers, transmitter):
                         bitstrue[(i << 3) + j] += 1 * confidence[i]
                     else:
                         bitsfalse[(i << 3) + j] += 1 * confidence[i]
-    '''
+
 
     # Then combine that information into a single aggregate message
     avgmsg = []
