@@ -233,6 +233,7 @@ def _truncate(avgmsg, confidences):
     for l in range(38, len(avgmsg) + 1, 7):
         candidates.append((_word_distance(avgmsg[l - 23:l], confidences, _END_SEQUENCE, '_'), l))
 
+    # Decide which length candidate is the winner, truncate message and confidences accordingly
     winner = min(candidates)
     l = winner[1]
     avgmsg = avgmsg[0:l]
@@ -332,14 +333,12 @@ def split_message(message):
     # init
     # this is what we want to use to initially split up the message, we expect this to be a '+'
     main_delimiter = ''
-    originator_code = (first_half_split[1])
-    event_code = (first_half_split[2])
+    originator_code = ''
+    event_code = ''
     location_codes = []
-    for i in range(3, len(first_half_split)):
-        location_codes.append(first_half_split[i])
-    purge_time = (second_half_split[0])
-    exact_time = (second_half_split[1])
-    callsign = (second_half_split[2])
+    purge_time = ''
+    exact_time = ''
+    callsign = ''
 
     # start splitting!
     # separate before/after location codes
@@ -458,13 +457,14 @@ def average_message(headers, transmitter):
     '''
 
     # First look through the messages and compute sums of confidence of bit values
+    # TODO: make this into its own function
     for (msg, c, when) in headers:
         if type(c) is str:
             confidence = [int(x) for x in c]
         else:
             confidence = c
         # Loop through the characters of the message
-        # TODO: change this to split on delimiter
+        # TODO: change this to split on delimiter (use _truncate() for this)
         for i in range(0, len(msg)):
             if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
                 # Loop through bits and apply confidence for true or false
