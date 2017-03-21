@@ -24,6 +24,7 @@ import logging
 import json
 from calendar import timegm
 import os
+import string
 
 
 class TestSAME(unittest.TestCase):
@@ -106,6 +107,7 @@ class TestSAME(unittest.TestCase):
         msg_time = TestSAME.get_time(clear_message)
 
         random.seed(0)  # ensure a repeatable test
+
         return clear_message, TestSAME.add_time([
             TestSAME.add_noise(clear_message, noise),
             TestSAME.add_noise(clear_message, noise),
@@ -447,26 +449,41 @@ class TestSAME(unittest.TestCase):
     def test__truncate(self):
 
         # setup
-
         test_msg = self.make_noisy_messages(.03)
         test_msg_2 = self.make_noisy_messages(.05)
+        short_msg = [c for c in random.sample(string.ascii_letters, 37)]
+        long_msg = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;00-031710,KE@X\'ÎWS-asdada2983918**!@*#@&%#$&%#*asddddddddddddJJJJJJJJJJJJJJJJJJ'
+
+        test_msg_long = self.add_noise(long_msg, 0)
+        test_msg_short = self.add_noise(short_msg, 0)
+
         print(test_msg[1][1])
         print(test_msg_2[1][1])
+        print(test_msg_long)
 
-        test_avgmsg = ['-', 'W', 'X', 'R', '-', 'R', 'W', 'T', '-', '0', '2', '0', '1', '0', '3', '-', '0', '2', '0', '2', '0', '9', '-', '0', '2', '0', '0', '9', '1', '-', '0', '2', '0', '1', '2', '1', '-', '0', '2', '9', '0', '4', '7', '-', '0', '2', '9', '1', '6', '5', '-', '0', '2', '9', '0', '9', '5', '-', '0', '2', '9', '0', '3', '7', '+', '0', '0', '3', '0', '-', '3', '0', '3', '1', '7', '0', '0', '-', 'K', 'E', 'A', 'X', '/', 'N', 'W', 'S', '-', '\x00', '\x00', '\x00', 'f', '!', '>']
+        test_avgmsg = [i for i in test_msg[1][1][0]]
         test_avgmsg_2 = [i for i in test_msg_2[1][1][0]]
-        expected_message = '-WXR-RWT-020103-020209-020091-020121-029047-029165-029095-029037+0030-3031700-KEAX/NWS-'
-        expected_message_2 = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;00-031710,KE@X\'ÎWS-'
+        test_avgmsg_long = [i for i in test_msg_long[0]]
+
+        expected_message = '-WXR-RWT-020103-020209-020091-°20121-029047-029165-029095-029037+0030-3031710-KEAX/NWS-'
+        expected_message_2 = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165-029095-02¹037+000-031710-KE@X/NWS-'
+        expected_message_long = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165-029095-02¹037+000-031710-KE@X/NWS-'
+        expected_message_short = ''.join(short_msg)
 
         # act
         test_truncate = SAME._truncate(test_avgmsg, test_msg[1][1][1])
         test_truncate_2 = SAME._truncate(test_avgmsg_2, test_msg_2[1][1][1])
+        test_truncate_3 = SAME._truncate(test_avgmsg_long, test_msg_long[1])
+        test_truncate_short = SAME._truncate(short_msg, test_msg_short[1])
 
         # assert
-
         self.assertEqual(''.join(test_truncate[0]), expected_message)
         print(test_truncate)
         self.assertEqual(''.join(test_truncate_2[0]), expected_message_2)
         print(test_truncate_2)
+        self.assertEqual(''.join(test_truncate_3[0]), expected_message_long)
+        print(test_truncate_3)
+        self.assertTrue(len(test_truncate_short[0]) == 37)
+        self.assertEqual(''.join(test_truncate_short[0]), expected_message_short)
 
 
