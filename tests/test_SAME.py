@@ -441,23 +441,32 @@ class TestSAME(unittest.TestCase):
     def test_add_bits(self):
         to_list = [0, 0, 0, 0, 0]
         from_list = [1, 1, 0, 1, 1]
-        self.assertTrue(SAME.add_bits(to_list, from_list), from_list)
+        self.assertEqual(SAME.add_bits(to_list, from_list), from_list)
 
     # TODO: expand this
     def test__truncate(self):
 
+        # setup
+
         test_msg = self.make_noisy_messages(.03)
+        test_msg_2 = self.make_noisy_messages(.05)
         print(test_msg[1][1])
-        expected_message_2 = '-WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\\'ÎWS-'
+        print(test_msg_2[1][1])
 
         test_avgmsg = ['-', 'W', 'X', 'R', '-', 'R', 'W', 'T', '-', '0', '2', '0', '1', '0', '3', '-', '0', '2', '0', '2', '0', '9', '-', '0', '2', '0', '0', '9', '1', '-', '0', '2', '0', '1', '2', '1', '-', '0', '2', '9', '0', '4', '7', '-', '0', '2', '9', '1', '6', '5', '-', '0', '2', '9', '0', '9', '5', '-', '0', '2', '9', '0', '3', '7', '+', '0', '0', '3', '0', '-', '3', '0', '3', '1', '7', '0', '0', '-', 'K', 'E', 'A', 'X', '/', 'N', 'W', 'S', '-', '\x00', '\x00', '\x00', 'f', '!', '>']
-        test_confidences = [72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 0, 0, 0, 30, 24, 48]
+        test_avgmsg_2 = [i for i in test_msg_2[1][1][0]]
         expected_message = '-WXR-RWT-020103-020209-020091-020121-029047-029165-029095-029037+0030-3031700-KEAX/NWS-'
+        expected_message_2 = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;00-031710,KE@X\'ÎWS-'
 
-        test_avgmsg_2 = [i for i in test_msg[1][1][0]]
-        self.assertTrue(SAME._truncate(test_avgmsg, test_confidences), expected_message)
-        self.assertTrue(SAME._truncate(test_avgmsg_2, test_msg[1][1][1]), expected_message_2)
-        if SAME._truncate(test_avgmsg_2, test_msg[1][1][1]) == expected_message_2:
-            print("PASS")
-        else:
-            print("FAIL")
+        # act
+        test_truncate = SAME._truncate(test_avgmsg, test_msg[1][1][1])
+        test_truncate_2 = SAME._truncate(test_avgmsg_2, test_msg_2[1][1][1])
+
+        # assert
+
+        self.assertEqual(''.join(test_truncate[0]), expected_message)
+        print(test_truncate)
+        self.assertEqual(''.join(test_truncate_2[0]), expected_message_2)
+        print(test_truncate_2)
+
+
