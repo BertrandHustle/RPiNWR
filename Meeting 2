@@ -1,0 +1,51 @@
+Integration tests:
+  compresses time
+
+Message splitting:
+  buffer length == message length
+  min length: -WXR-RWT-
+
+move sliding window through all possible places
+
+max is 255 characters
+
+_truncate (notes):
+
+
+1. Check if it's at least 38 chars
+2. append a tuple of (word_distance, confidence) for each letter
+3. calculate which length is the most accurate, pick that as the "winner"
+4. cut down message and confidences to that length
+5. ???
+6. make a "frame" that's the same size as the message
+7.
+
+  takes a list of all the characters of a message and their confidences
+
+word_distance: works like a spell checker
+number = how many bits need to be changed to get to correct letter
+
+
+To mess around with code in interpreter:
+import SAME.function_you_want_to_use
+
+
+WRITE TEST FOR _truncate()
+
+Action Plan for average_message():
+
+A: calculate min. bitwise distance between "good" string and given string
+  - possibly use _reconcile_character() for this?
+B: truncate
+C: go from there
+
+
+1. calculate confidences for each message
+2. _truncate(message)
+3. split_message('-'), return lists of message chunks
+4. for (name, of, chunk, [location_codes], etc.) in result of #3:
+  - do rest of bit confidence reconciliation
+  - check SAME formatting on each chunk
+  - cat the result onto a return string
+5. check SAME format on whole string
+6. return return_string
