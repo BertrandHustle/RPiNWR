@@ -425,13 +425,28 @@ class TestSAME(unittest.TestCase):
                                                              'ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
 
     def test_split_message(self):
-        test_msg = '-WXR-SVR-037085-037101+0100-1250218-KRAH/NWS-'
-        test_msg_2 = '-WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\\'ÎWS-'
+
+        # setup
+
+        input_msg = '-WXR-SVR-037085-037101+0100-1250218-KRAH/NWS-'
+        input_confidences = [0]*len(input_msg)
+        input_msg_2 = '-WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\\'ÎWS-'
+        input_confidences_2 = [0]*len(input_msg_2)
+
+        # expected values
+
         expected_list = ['WXR', 'SVR', ['037085', '037101'], '0100', '1250218', 'KRAH/NWS']
         expected_list_2 = ['WXR', 'RWT', ['020103', '020209', '020091', '°20121', '029047', '029165%029095', '029037',], '0030', '3031710', 'KEAX', 'ÎWS']
-        print(SAME.split_message(test_msg_2))
-        self.assertEqual(SAME.split_message(test_msg), expected_list)
-        self.assertEqual(SAME.split_message(test_msg_2), expected_list_2)
+
+        # test
+
+        test_msg = split_message(input_msg, input_confidences)
+        test_msg_2 = split_message(input_msg_2, input_confidences_2)
+
+        # assert
+
+        self.assertEqual(test_msg, expected_list)
+        self.assertEqual(test_msg_2, expected_list_2)
 
     def test_check_if_valid_code(self):
         test_codes = ['WXR', 'W^X', 'WXR']
@@ -445,44 +460,39 @@ class TestSAME(unittest.TestCase):
         from_list = [1, 1, 0, 1, 1]
         self.assertEqual(SAME.add_bits(to_list, from_list), from_list)
 
-    # TODO: expand this
     def test__truncate(self):
 
         # setup
         test_msg = self.make_noisy_messages(.03)
         test_msg_2 = self.make_noisy_messages(.05)
+        # make a random message that's too short by one character (we want our messages to be 38 or higher to be valid)
         short_msg = [c for c in random.sample(string.ascii_letters, 37)]
-        long_msg = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;00-031710,KE@X\'ÎWS-asdada2983918**!@*#@&%#$&%#*asddddddddddddJJJJJJJJJJJJJJJJJJ'
-
-        test_msg_long = self.add_noise(long_msg, 0)
         test_msg_short = self.add_noise(short_msg, 0)
+        long_msg = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;00-031710,KE@X\'ÎWS-asdada2983918**!@*#@&%#$&%#*asddddddddddddJJJJJJJJJJJJJJJJJJ'
+        test_msg_long = self.add_noise(long_msg, 0)
 
-        print(test_msg[1][1])
-        print(test_msg_2[1][1])
-        print(test_msg_long)
-
+        # strip out just the message string from the tuple of transmitter, confidences, message
         test_avgmsg = [i for i in test_msg[1][1][0]]
         test_avgmsg_2 = [i for i in test_msg_2[1][1][0]]
         test_avgmsg_long = [i for i in test_msg_long[0]]
 
+        # the messages we're expecting to be outputted from __truncate
         expected_message = '-WXR-RWT-020103-020209-020091-°20121-029047-029165-029095-029037+0030-3031710-KEAX/NWS-'
         expected_message_2 = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165-029095-02¹037+000-031710-KE@X/NWS-'
         expected_message_long = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165-029095-02¹037+000-031710-KE@X/NWS-'
         expected_message_short = ''.join(short_msg)
 
-        # act
+        # testing
         test_truncate = SAME._truncate(test_avgmsg, test_msg[1][1][1])
         test_truncate_2 = SAME._truncate(test_avgmsg_2, test_msg_2[1][1][1])
-        test_truncate_3 = SAME._truncate(test_avgmsg_long, test_msg_long[1])
+        test_truncate_long = SAME._truncate(test_avgmsg_long, test_msg_long[1])
         test_truncate_short = SAME._truncate(short_msg, test_msg_short[1])
 
         # assert
         self.assertEqual(''.join(test_truncate[0]), expected_message)
-        print(test_truncate)
         self.assertEqual(''.join(test_truncate_2[0]), expected_message_2)
-        print(test_truncate_2)
-        self.assertEqual(''.join(test_truncate_3[0]), expected_message_long)
-        print(test_truncate_3)
+        self.assertEqual(''.join(test_truncate_long[0]), expected_message_long)
+        # test length
         self.assertTrue(len(test_truncate_short[0]) == 37)
         self.assertEqual(''.join(test_truncate_short[0]), expected_message_short)
 

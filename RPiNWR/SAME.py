@@ -252,7 +252,12 @@ def _truncate(avgmsg, confidences):
     for i in range(0, len(avgmsg)):
         if frame[i] != '_':
             if avgmsg[i] != frame[i]:
-                avgmsg[i] = frame[i]
+                listmsg = [c for c in avgmsg]
+                listmsg[i] = frame[i]
+                mutated_string = ''
+                for c in listmsg:
+                    mutated_string += c
+                avgmsg = mutated_string
                 confidences[i] = end_confidence
             else:
                 confidences[i] = max(end_confidence, confidences[i])
@@ -328,7 +333,11 @@ def sum_bits(string):
 # regex patterns:
 # TODO: add these to the init section at the top of this file
 
-def split_message(message):
+def split_message(message, confidences):
+
+    # first, truncate the message
+
+    message = _truncate(message, confidences)[0]
 
     # init
     # this is what we want to use to initially split up the message, we expect this to be a '+'
@@ -455,6 +464,8 @@ def average_message(headers, transmitter):
         possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
         print(possible_char)
     '''
+
+
 
     # First look through the messages and compute sums of confidence of bit values
     # TODO: make this into its own function
