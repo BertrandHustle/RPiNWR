@@ -426,25 +426,29 @@ class TestSAME(unittest.TestCase):
 
     def test_split_message(self):
 
-        # setup
+        '''
+        '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
+        "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
+        '/WXR-ZWT-020±03-22020\x19-06°091-121121-°2904?/229145-p2909%-029037+0830-30;57 0mËEAXoNWS-'
+        '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
+        "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
+        '''
 
+        # setup
         input_msg = '-WXR-SVR-037085-037101+0100-1250218-KRAH/NWS-'
         input_confidences = [0]*len(input_msg)
         input_msg_2 = '-WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\\'ÎWS-'
         input_confidences_2 = [0]*len(input_msg_2)
 
         # expected values
-
         expected_list = ['WXR', 'SVR', ['037085', '037101'], '0100', '1250218', 'KRAH/NWS']
         expected_list_2 = ['WXR', 'RWT', ['020103', '020209', '020091', '°20121', '029047', '029165%029095', '029037',], '0030', '3031710', 'KEAX', 'ÎWS']
 
         # test
-
         test_msg = split_message(input_msg, input_confidences)
         test_msg_2 = split_message(input_msg_2, input_confidences_2)
 
         # assert
-
         self.assertEqual(test_msg, expected_list)
         self.assertEqual(test_msg_2, expected_list_2)
 
@@ -465,6 +469,7 @@ class TestSAME(unittest.TestCase):
         # setup
         test_msg = self.make_noisy_messages(.03)
         test_msg_2 = self.make_noisy_messages(.05)
+
         # make a random message that's too short by one character (we want our messages to be 38 or higher to be valid)
         short_msg = [c for c in random.sample(string.ascii_letters, 37)]
         test_msg_short = self.add_noise(short_msg, 0)
