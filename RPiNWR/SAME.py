@@ -252,7 +252,12 @@ def _truncate(avgmsg, confidences):
     for i in range(0, len(avgmsg)):
         if frame[i] != '_':
             if avgmsg[i] != frame[i]:
-                avgmsg[i] = frame[i]
+                listmsg = [c for c in avgmsg]
+                listmsg[i] = frame[i]
+                mutated_string = ''
+                for c in listmsg:
+                    mutated_string += c
+                avgmsg = mutated_string
                 confidences[i] = end_confidence
             else:
                 confidences[i] = max(end_confidence, confidences[i])
@@ -328,7 +333,11 @@ def sum_bits(string):
 # regex patterns:
 # TODO: add these to the init section at the top of this file
 
-def split_message(message):
+def split_message(message, confidences):
+
+    # first, truncate the message
+
+    message = _truncate(message, confidences)[0]
 
     # init
     # this is what we want to use to initially split up the message, we expect this to be a '+'
@@ -340,19 +349,33 @@ def split_message(message):
     exact_time = ''
     callsign = ''
 
+    '''
+    '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
+    "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
+    '/WXR-ZWT-020±03-22020\x19-06°091-121121-°2904?/229145-p2909%-029037+0830-30;57 0mËEAXoNWS-'
+    '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
+    "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
+    '''
+
     # start splitting!
-    # separate before/after location codes
-    if '+' not in message:
-        # look for the purge time and return the character before it
-        # because we know the purge time has to be 4 digits,
-        # the character before it must be our main delimiter (the '+')
-        purge_time_regex_search = re.findall('\D[0-9]{4}\D', message)
-        if purge_time_regex_search:
-            main_delimiter = purge_time_regex_search[0][0]
+    # TODO: we need to find either a '+' or a ';' (and it has to be the RIGHT char) to separate on
+    # regex to find 4 digit numbers that can start with 0 and are surrounded by non-word chars: '\W[0-9]{4}\W'
+    purge_time_regex_search = re.findall('\W[0-9]{4}\W', message)
+    # regex to find hex escapes: '\\x[0-9]{3}\\x[0-9]{3}'
+    hex_purge_time_regex_search = re.findall('\\x[0-9]{3}\\x[0-9]{3}', message)
+
+    if purge_time_regex_search:
+        if '+' in message and purge_time_regex_search[0][0] is '+':
+            main_delimiter = '+'
         else:
-            print('MAIN DELIMITER NOT FOUND')
+            main_delimiter = purge_time_regex_search[0][0]
+    elif hex_purge_time_regex_search:
+        if ';' in message and hex_purge_time_regex_search[0][0] is ';':
+            main_delimiter = ';'
+        else:
+            main_delimiter = hex_purge_time_regex_search[0][0]
     else:
-        main_delimiter = '+'
+        print('UNABLE TO DETERMINE DELIMITER')
 
     main_delimiter_split = message.split(main_delimiter)
 
@@ -455,6 +478,8 @@ def average_message(headers, transmitter):
         possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
         print(possible_char)
     '''
+
+
 
     # First look through the messages and compute sums of confidence of bit values
     # TODO: make this into its own function
