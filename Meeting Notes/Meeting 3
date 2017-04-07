@@ -1,0 +1,23 @@
+1. _truncate should take a data structure like the following:
+
+[(msg, c)(msg, c)(msg, c)]
+
+and return a single "best" message:
+(msg, c)
+
+using the distance function in SAME
+
+2. distance function should ONLY calculate bitwise distance, not byte and bit
+
+3. We want a class for these SAME messages like the following:
+
+Class SAME_Parts:
+  a = message_parts, confidences, timestamps
+  b = distances
+  c = aggregated message, confidence
+  d = avgmsg()
+    1. truncate
+    2. originator code = WXR, CIV, etc.
+    3. etc. (rest of message parts)
+
+4. rewrite _truncate test to accomodate above changes

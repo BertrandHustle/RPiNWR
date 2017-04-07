@@ -466,6 +466,12 @@ class TestSAME(unittest.TestCase):
 
     def test__truncate(self):
 
+        # NOTES:
+        # for random data, stipulate random number seed
+        # split all of these into separate tests (organize by similar trains of thought)
+        # make message generation setup into its own method
+        # put expected and test msg next to each other, add to array as tuples
+
         # setup
         test_msg = self.make_noisy_messages(.03)
         test_msg_2 = self.make_noisy_messages(.05)
