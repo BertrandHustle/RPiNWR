@@ -142,6 +142,253 @@ __SAME_CHARS = [
 ]
 
 
+class SAMEMessage(CommonMessage):
+    """
+    A SAMEMessage represents a message from NWR.
+
+    Responsibilities:
+       - Collect the multiple headers
+       - Know when it is fully received (timeout, enough messages, or external signal)
+       - Aggregate headers
+       - Know the certainty for aggregated headers
+       - Know how to extract the information from the various fields of the SAME message
+       - Implementation of the structure found in http://www.nws.noaa.gov/directives/sym/pd01017012curr.pdf
+    """
+
+    def __init__(self, transmitter, headers=None, received_callback=None):
+        """
+        :param transmitter: Call letters for the transmitter, so that FIPS codes can be checked.
+        :param headers:  Headers for a legacy message to reconstitute, None if this is a new message,
+           and a string if it's just for parsing.
+        :param received_callback: A callable taking one parameter, this SAMEMessage, to be called once, on the
+           occasion that this message is first fully received
+        :return:
+        """
+        if transmitter is not None and transmitter[0] == '-':
+            headers = transmitter
+            transmitter = None
+
+        self.transmitter = transmitter
+        self.__avg_message = None
+        self.received_callback = received_callback
+        self.timeout = 0
+        event_id = None
+        if headers:
+            if hasattr(headers, 'lower'):
+                self.headers = None
+                self.__avg_message = (headers, '9' * len(headers))
+                self.start_time = time.time()
+                self.start_time = self.get_start_time_sec()
+                self.timeout = float("-inf")
+                event_id = self.__avg_message
+            else:
+                self.headers = headers
+                self.start_time = headers[0][2]
+                self.timeout = self.start_time + 6
+        else:
+            self.headers = []
+            self.start_time = time.time()
+            self.timeout = self.start_time + 6
+
+        self.published = self.start_time
+        if event_id is None:
+            event_id = "%s-%.3f" % (self.transmitter, self.start_time)
+        self.event_id = event_id
+
+    def add_header(self, header, confidence):
+        if self.fully_received():
+            raise ValueError("Message is already complete.")
+        when = time.time()
+        try:
+            confidence[0] + 'a'
+        except TypeError:
+            confidence = "".join([str(x) for x in confidence])
+        self.headers.append((_unicodify(header), confidence, when))
+        self.timeout = when + 6
+
+    def get_areas(self):
+        return self.get_counties()
+
+    def fully_received(self, make_it_so=False, extend_timeout=False):
+        """
+        :param make_it_so: True to assert that the message has been fully received
+        :param extend_timeout: True to extend the timeout if it has not been reached
+        :return True if the message has been fully received, False otherwise
+        """
+        if make_it_so:
+            self.timeout = float("-inf")
+        complete = self.timeout < time.time() or len(self.headers) >= 3
+        if complete and self.received_callback:
+            cb = self.received_callback
+            self.received_callback = None
+            cb(self)
+        if not complete and extend_timeout:
+            self.timeout = time.time() + 6
+        return complete
+
+    def get_SAME_message(self):
+        if self.fully_received():
+            if self.__avg_message is None:
+                self.__avg_message = average_message(self.headers, self.transmitter)
+                mtype = self.get_event_type()
+                level = default_prioritization(mtype)
+                logging.getLogger("RPiNWR.same.message.%s.%s" % (self.get_originator(), mtype)).log(level, "%s", self)
+            return self.__avg_message
+        else:
+            if len(self.headers) > 0:
+                return average_message(self.headers)
+            else:
+                return "", []
+
+    def split_message(message, confidences):
+
+        # first, truncate the message
+
+        message = _truncate(message, confidences)[0]
+
+        # init
+        # this is what we want to use to initially split up the message, we expect this to be a '+'
+        # _truncate will always give us a message with 22 chars after the delimiter, therefore we want the character
+        # right before that set of chars (i.e. the delimiter itself)
+        main_delimiter = message[len(message)-23]
+        originator_code = ''
+        event_code = ''
+        location_codes = []
+        purge_time = ''
+        exact_time = ''
+        callsign = ''
+
+        '''
+        '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
+        "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
+        '/WXR-ZWT-020±03-22020\x19-06°091-121121-°2904?/229145-p2909%-029037+0830-30;57 0mËEAXoNWS-'
+        '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
+        "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
+        '''
+
+        # start splitting!
+        # we want to split this based on length, not nearby chars (since those chars can be unreliable)
+        # so: the plus has to be after a group of at least 15 chars, and after groups of +7 after that
+
+        # shortest possible SAME message (1 county code)
+        # len = 38
+        # "-WXR-SVR-037085+0100-1250217-KRAH/NWS-"
+
+        # longest possible SAME message (31 county code)
+        # len = 248
+
+        # the end sequence is always a length of 22, not counting the '+'
+        # this means that assuming our _truncate function works as intended, our delimiter should ALWAYS be
+        # at message[:-22]
+
+        main_delimiter_split = message.split(main_delimiter)
+
+        if len(main_delimiter_split) == 2:
+            # split up to (and including) location codes
+            first_half_split = main_delimiter_split[0].split('-')
+            # everything after location codes
+            second_half_split = main_delimiter_split[1].split('-')
+            # 0030-3031710,KEAX\\'ÎWS-
+
+            # check to make sure we're getting the formats we expect for individual chunks of the message
+            # then add to our set of return values
+
+            # first half:
+            originator_code = (first_half_split[1])
+            event_code = (first_half_split[2])
+            location_codes = []
+            for i in range(3, len(first_half_split)):
+                location_codes.append(first_half_split[i])
+
+            # second half:
+            purge_time = (second_half_split[0])
+            exact_time = (second_half_split[1])
+            callsign = (second_half_split[2])
+
+        return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
+
+    def get_originator(self):
+        return self.get_SAME_message()[0][1:4]
+
+    def get_event_type(self):
+        return self.get_SAME_message()[0][5:8]
+
+    def get_counties(self):
+        m = self.get_SAME_message()[0]
+        return m[9:m.find('+')].split("-")
+
+    def get_duration_str(self):
+        m = self.get_SAME_message()[0]
+        start = m.find('+') + 1
+        return m[start:start + 4]
+
+    def get_start_time_str(self):
+        m = self.get_SAME_message()[0]
+        start = m.find('+') + 6
+        return m[start:start + 7]
+
+    def get_duration_sec(self):
+        d_str = self.get_duration_str()
+        return int(d_str[0:2]) * 60 * 60 + int(d_str[2:4]) * 60
+
+    def get_start_time_sec(self):
+        now = time.gmtime(self.start_time)
+        year = now.tm_year
+        issue_jday = int(self.get_start_time_str()[0:3])
+        if now.tm_yday < 10 and issue_jday > 355:
+            year -= 1
+        elif now.tm_yday > 355 and issue_jday < 10:
+            year += 1
+        return calendar.timegm(time.strptime(str(year) + self.get_start_time_str() + 'UTC', '%Y%j%H%M%Z'))
+
+    def get_end_time_sec(self):
+        return self.get_start_time_sec() + self.get_duration_sec()
+
+    def applies_to_fips(self, fips):
+        """
+        :param fips: A string representing the FIPS code with optional leading P component to indicate subset of county
+        :return: True if the county was clearly included in the message, False if it was clearly not in the message,
+            and None if there was uncertainty.
+        """
+        if len(fips) == 5:
+            fips = '0' + fips
+        if len(fips) != 6:
+            raise ValueError()
+
+        # TODO identify an uncertain match (i.e. there was ambiguity in the counties received)
+        msg, confidence = self.get_SAME_message()
+        for i in range(15, len(msg) - 20, 7):
+            match = True
+            for x in range(-1, -6, -1):
+                match &= msg[i + x] == fips[x]
+                if not match:
+                    break
+            match &= fips[0] == '0' or msg[i - 6] == '0' or fips[0] == msg[i - 6]
+            if match:
+                return True
+
+        return False
+
+    def get_broadcaster(self):
+        m = self.get_SAME_message()[0]
+        start = m.find('+') + 14
+        return m[start:-1]
+
+    def __str__(self):
+        msg = self.get_SAME_message()
+        return 'SAMEMessage: { "message":"%s", "confidence":"%s" }' % (
+            _unicodify(msg[0]), "".join([str(x) for x in msg[1]]))
+
+    def to_dict(self):
+        return {
+            "message": self.get_SAME_message()[0],
+            'confidence': self.get_SAME_message()[1],
+            'headers': self.headers,
+            "time": self.start_time
+        }
+
+
+
 def _word_distance(word, confidence, choice, wildcard=None):
     d = 0
     for i in range(0, len(choice)):
@@ -252,12 +499,9 @@ def _truncate(avgmsg, confidences):
     for i in range(0, len(avgmsg)):
         if frame[i] != '_':
             if avgmsg[i] != frame[i]:
-                listmsg = [c for c in avgmsg]
+                listmsg = list(avgmsg)
                 listmsg[i] = frame[i]
-                mutated_string = ''
-                for c in listmsg:
-                    mutated_string += c
-                avgmsg = mutated_string
+                avgmsg = ''.join(listmsg)
                 confidences[i] = end_confidence
             else:
                 confidences[i] = max(end_confidence, confidences[i])
@@ -333,75 +577,7 @@ def sum_bits(string):
 # regex patterns:
 # TODO: add these to the init section at the top of this file
 
-def split_message(message, confidences):
 
-    # first, truncate the message
-
-    message = _truncate(message, confidences)[0]
-
-    # init
-    # this is what we want to use to initially split up the message, we expect this to be a '+'
-    main_delimiter = ''
-    originator_code = ''
-    event_code = ''
-    location_codes = []
-    purge_time = ''
-    exact_time = ''
-    callsign = ''
-
-    '''
-    '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
-    "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
-    '/WXR-ZWT-020±03-22020\x19-06°091-121121-°2904?/229145-p2909%-029037+0830-30;57 0mËEAXoNWS-'
-    '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
-    "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
-    '''
-
-    # start splitting!
-    # TODO: we need to find either a '+' or a ';' (and it has to be the RIGHT char) to separate on
-    # regex to find 4 digit numbers that can start with 0 and are surrounded by non-word chars: '\W[0-9]{4}\W'
-    purge_time_regex_search = re.findall('\W[0-9]{4}\W', message)
-    # regex to find hex escapes: '\\x[0-9]{3}\\x[0-9]{3}'
-    hex_purge_time_regex_search = re.findall('\\x[0-9]{3}\\x[0-9]{3}', message)
-
-    if purge_time_regex_search:
-        if '+' in message and purge_time_regex_search[0][0] is '+':
-            main_delimiter = '+'
-        else:
-            main_delimiter = purge_time_regex_search[0][0]
-    elif hex_purge_time_regex_search:
-        if ';' in message and hex_purge_time_regex_search[0][0] is ';':
-            main_delimiter = ';'
-        else:
-            main_delimiter = hex_purge_time_regex_search[0][0]
-    else:
-        print('UNABLE TO DETERMINE DELIMITER')
-
-    main_delimiter_split = message.split(main_delimiter)
-
-    if len(main_delimiter_split) == 2:
-        # split up to (and including) location codes
-        first_half_split = main_delimiter_split[0].split('-')
-        # everything after location codes
-        second_half_split = main_delimiter_split[1].split('-')
-        # 0030-3031710,KEAX\\'ÎWS-
-
-        # check to make sure we're getting the formats we expect for individual chunks of the message
-        # then add to our set of return values
-
-        # first half:
-        originator_code = (first_half_split[1])
-        event_code = (first_half_split[2])
-        location_codes = []
-        for i in range(3, len(first_half_split)):
-            location_codes.append(first_half_split[i])
-
-        # second half:
-        purge_time = (second_half_split[0])
-        exact_time = (second_half_split[1])
-        callsign = (second_half_split[2])
-
-    return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
 
 # takes a list of codes and a list of valid codes, and checks to make sure most of the codes correspond to a valid list
 # e.g. if we have a list of ['WXR', 'W^X', 'WXR'] we should get the result that this is a valid originator code
@@ -618,185 +794,6 @@ def average_message(headers, transmitter):
 
 # -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
 SAME_PATTERN = re.compile('-(EAS|CIV|WXR|PEP)-([A-Z]{3})((?:-\\d{6})+)\\+(\\d{4})-(\\d{7})-([A-Z/]+)-?')
-
-
-class SAMEMessage(CommonMessage):
-    """
-    A SAMEMessage represents a message from NWR.
-
-    Responsibilities:
-       - Collect the multiple headers
-       - Know when it is fully received (timeout, enough messages, or external signal)
-       - Aggregate headers
-       - Know the certainty for aggregated headers
-       - Know how to extract the information from the various fields of the SAME message
-       - Implementation of the structure found in http://www.nws.noaa.gov/directives/sym/pd01017012curr.pdf
-    """
-
-    def __init__(self, transmitter, headers=None, received_callback=None):
-        """
-        :param transmitter: Call letters for the transmitter, so that FIPS codes can be checked.
-        :param headers:  Headers for a legacy message to reconstitute, None if this is a new message,
-           and a string if it's just for parsing.
-        :param received_callback: A callable taking one parameter, this SAMEMessage, to be called once, on the
-           occasion that this message is first fully received
-        :return:
-        """
-        if transmitter is not None and transmitter[0] == '-':
-            headers = transmitter
-            transmitter = None
-
-        self.transmitter = transmitter
-        self.__avg_message = None
-        self.received_callback = received_callback
-        self.timeout = 0
-        event_id = None
-        if headers:
-            if hasattr(headers, 'lower'):
-                self.headers = None
-                self.__avg_message = (headers, '9' * len(headers))
-                self.start_time = time.time()
-                self.start_time = self.get_start_time_sec()
-                self.timeout = float("-inf")
-                event_id = self.__avg_message
-            else:
-                self.headers = headers
-                self.start_time = headers[0][2]
-                self.timeout = self.start_time + 6
-        else:
-            self.headers = []
-            self.start_time = time.time()
-            self.timeout = self.start_time + 6
-
-        self.published = self.start_time
-        if event_id is None:
-            event_id = "%s-%.3f" % (self.transmitter, self.start_time)
-        self.event_id = event_id
-
-    def add_header(self, header, confidence):
-        if self.fully_received():
-            raise ValueError("Message is already complete.")
-        when = time.time()
-        try:
-            confidence[0] + 'a'
-        except TypeError:
-            confidence = "".join([str(x) for x in confidence])
-        self.headers.append((_unicodify(header), confidence, when))
-        self.timeout = when + 6
-
-    def get_areas(self):
-        return self.get_counties()
-
-    def fully_received(self, make_it_so=False, extend_timeout=False):
-        """
-        :param make_it_so: True to assert that the message has been fully received
-        :param extend_timeout: True to extend the timeout if it has not been reached
-        :return True if the message has been fully received, False otherwise
-        """
-        if make_it_so:
-            self.timeout = float("-inf")
-        complete = self.timeout < time.time() or len(self.headers) >= 3
-        if complete and self.received_callback:
-            cb = self.received_callback
-            self.received_callback = None
-            cb(self)
-        if not complete and extend_timeout:
-            self.timeout = time.time() + 6
-        return complete
-
-    def get_SAME_message(self):
-        if self.fully_received():
-            if self.__avg_message is None:
-                self.__avg_message = average_message(self.headers, self.transmitter)
-                mtype = self.get_event_type()
-                level = default_prioritization(mtype)
-                logging.getLogger("RPiNWR.same.message.%s.%s" % (self.get_originator(), mtype)).log(level, "%s", self)
-            return self.__avg_message
-        else:
-            if len(self.headers) > 0:
-                return average_message(self.headers)
-            else:
-                return "", []
-
-    def get_originator(self):
-        return self.get_SAME_message()[0][1:4]
-
-    def get_event_type(self):
-        return self.get_SAME_message()[0][5:8]
-
-    def get_counties(self):
-        m = self.get_SAME_message()[0]
-        return m[9:m.find('+')].split("-")
-
-    def get_duration_str(self):
-        m = self.get_SAME_message()[0]
-        start = m.find('+') + 1
-        return m[start:start + 4]
-
-    def get_start_time_str(self):
-        m = self.get_SAME_message()[0]
-        start = m.find('+') + 6
-        return m[start:start + 7]
-
-    def get_duration_sec(self):
-        d_str = self.get_duration_str()
-        return int(d_str[0:2]) * 60 * 60 + int(d_str[2:4]) * 60
-
-    def get_start_time_sec(self):
-        now = time.gmtime(self.start_time)
-        year = now.tm_year
-        issue_jday = int(self.get_start_time_str()[0:3])
-        if now.tm_yday < 10 and issue_jday > 355:
-            year -= 1
-        elif now.tm_yday > 355 and issue_jday < 10:
-            year += 1
-        return calendar.timegm(time.strptime(str(year) + self.get_start_time_str() + 'UTC', '%Y%j%H%M%Z'))
-
-    def get_end_time_sec(self):
-        return self.get_start_time_sec() + self.get_duration_sec()
-
-    def applies_to_fips(self, fips):
-        """
-        :param fips: A string representing the FIPS code with optional leading P component to indicate subset of county
-        :return: True if the county was clearly included in the message, False if it was clearly not in the message,
-            and None if there was uncertainty.
-        """
-        if len(fips) == 5:
-            fips = '0' + fips
-        if len(fips) != 6:
-            raise ValueError()
-
-        # TODO identify an uncertain match (i.e. there was ambiguity in the counties received)
-        msg, confidence = self.get_SAME_message()
-        for i in range(15, len(msg) - 20, 7):
-            match = True
-            for x in range(-1, -6, -1):
-                match &= msg[i + x] == fips[x]
-                if not match:
-                    break
-            match &= fips[0] == '0' or msg[i - 6] == '0' or fips[0] == msg[i - 6]
-            if match:
-                return True
-
-        return False
-
-    def get_broadcaster(self):
-        m = self.get_SAME_message()[0]
-        start = m.find('+') + 14
-        return m[start:-1]
-
-    def __str__(self):
-        msg = self.get_SAME_message()
-        return 'SAMEMessage: { "message":"%s", "confidence":"%s" }' % (
-            _unicodify(msg[0]), "".join([str(x) for x in msg[1]]))
-
-    def to_dict(self):
-        return {
-            "message": self.get_SAME_message()[0],
-            'confidence': self.get_SAME_message()[1],
-            'headers': self.headers,
-            "time": self.start_time
-        }
 
 
 def default_prioritization(event_type):

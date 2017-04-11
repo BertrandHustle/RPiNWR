@@ -426,6 +426,9 @@ class TestSAME(unittest.TestCase):
 
     def test_split_message(self):
 
+        # setup
+        test_SAMEMessage = SAME.SAMEMessage('GHA')
+
         '''
         '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
         "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
@@ -445,8 +448,8 @@ class TestSAME(unittest.TestCase):
         expected_list_2 = ['WXR', 'RWT', ['020103', '020209', '020091', '°20121', '029047', '029165%029095', '029037',], '0030', '3031710', 'KEAX', 'ÎWS']
 
         # test
-        test_msg = split_message(input_msg, input_confidences)
-        test_msg_2 = split_message(input_msg_2, input_confidences_2)
+        test_msg = test_SAMEMessage.split_message(input_msg, input_confidences)
+        test_msg_2 = test_SAMEMessage.split_message(input_msg_2, input_confidences_2)
 
         # assert
         self.assertEqual(test_msg, expected_list)
@@ -482,7 +485,19 @@ class TestSAME(unittest.TestCase):
         long_msg = '-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;00-031710,KE@X\'ÎWS-asdada2983918**!@*#@&%#$&%#*asddddddddddddJJJJJJJJJJJJJJJJJJ'
         test_msg_long = self.add_noise(long_msg, 0)
 
-        # strip out just the message string from the tuple of transmitter, confidences, message
+
+        # TEST LIST
+        test_list = ['-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-',
+                     "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-",
+                     '/WXR-ZWT-020±03-22020\x19-06°091-121121-°2904?/229145-p2909%-029037+0830-30;57 0mËEAXoNWS-',
+                     '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-',
+                     "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"]
+        for i in test_list:
+            noisy = self.add_noise(i, 0)
+            truncated = SAME._truncate(noisy[0], noisy[1])
+            print(truncated)
+
+    # strip out just the message string from the tuple of transmitter, confidences, message
         test_avgmsg = [i for i in test_msg[1][1][0]]
         test_avgmsg_2 = [i for i in test_msg_2[1][1][0]]
         test_avgmsg_long = [i for i in test_msg_long[0]]
@@ -499,10 +514,16 @@ class TestSAME(unittest.TestCase):
         test_truncate_long = SAME._truncate(test_avgmsg_long, test_msg_long[1])
         test_truncate_short = SAME._truncate(short_msg, test_msg_short[1])
 
+        '''
+        for i in [test_truncate, test_truncate_2, test_truncate_long]:
+            print(i)
+        '''
+
         # assert
         self.assertEqual(''.join(test_truncate[0]), expected_message)
         self.assertEqual(''.join(test_truncate_2[0]), expected_message_2)
         self.assertEqual(''.join(test_truncate_long[0]), expected_message_long)
+
         # test length
         self.assertTrue(len(test_truncate_short[0]) == 37)
         self.assertEqual(''.join(test_truncate_short[0]), expected_message_short)

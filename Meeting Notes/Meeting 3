@@ -20,4 +20,6 @@ Class SAME_Parts:
     2. originator code = WXR, CIV, etc.
     3. etc. (rest of message parts)
 
+This class should have a constructor that auto-constructs our finished message when a SAMEMessage object is created
+
 4. rewrite _truncate test to accomodate above changes
