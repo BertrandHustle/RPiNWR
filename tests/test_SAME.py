@@ -426,9 +426,6 @@ class TestSAME(unittest.TestCase):
 
     def test_split_message(self):
 
-        # setup
-        test_SAMEMessage = SAME.SAMEMessage('GHA')
-
         '''
         '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
         "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
@@ -445,11 +442,11 @@ class TestSAME(unittest.TestCase):
 
         # expected values
         expected_list = ['WXR', 'SVR', ['037085', '037101'], '0100', '1250218', 'KRAH/NWS']
-        expected_list_2 = ['WXR', 'RWT', ['020103', '020209', '020091', '°20121', '029047', '029165%029095', '029037',], '0030', '3031710', 'KEAX', 'ÎWS']
+        expected_list_2 = ['WXR', 'RWT', ['020103', '020209', '020091', '°20121', '029047', '029165', '029095', '029037',], '0030', '3031710', 'KEAX/NWS']
 
         # test
-        test_msg = test_SAMEMessage.split_message(input_msg, input_confidences)
-        test_msg_2 = test_SAMEMessage.split_message(input_msg_2, input_confidences_2)
+        test_msg = SAME.split_message(input_msg, input_confidences)
+        test_msg_2 = SAME.split_message(input_msg_2, input_confidences_2)
 
         # assert
         self.assertEqual(test_msg, expected_list)

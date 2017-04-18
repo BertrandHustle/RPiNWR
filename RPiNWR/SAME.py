@@ -240,73 +240,6 @@ class SAMEMessage(CommonMessage):
             else:
                 return "", []
 
-    def split_message(message, confidences):
-
-        # first, truncate the message
-
-        message = _truncate(message, confidences)[0]
-
-        # init
-        # this is what we want to use to initially split up the message, we expect this to be a '+'
-        # _truncate will always give us a message with 22 chars after the delimiter, therefore we want the character
-        # right before that set of chars (i.e. the delimiter itself)
-        main_delimiter = message[len(message)-23]
-        originator_code = ''
-        event_code = ''
-        location_codes = []
-        purge_time = ''
-        exact_time = ''
-        callsign = ''
-
-        '''
-        '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
-        "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
-        '/WXR-ZWT-020±03-22020\x19-06°091-121121-°2904?/229145-p2909%-029037+0830-30;57 0mËEAXoNWS-'
-        '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
-        "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
-        '''
-
-        # start splitting!
-        # we want to split this based on length, not nearby chars (since those chars can be unreliable)
-        # so: the plus has to be after a group of at least 15 chars, and after groups of +7 after that
-
-        # shortest possible SAME message (1 county code)
-        # len = 38
-        # "-WXR-SVR-037085+0100-1250217-KRAH/NWS-"
-
-        # longest possible SAME message (31 county code)
-        # len = 248
-
-        # the end sequence is always a length of 22, not counting the '+'
-        # this means that assuming our _truncate function works as intended, our delimiter should ALWAYS be
-        # at message[:-22]
-
-        main_delimiter_split = message.split(main_delimiter)
-
-        if len(main_delimiter_split) == 2:
-            # split up to (and including) location codes
-            first_half_split = main_delimiter_split[0].split('-')
-            # everything after location codes
-            second_half_split = main_delimiter_split[1].split('-')
-            # 0030-3031710,KEAX\\'ÎWS-
-
-            # check to make sure we're getting the formats we expect for individual chunks of the message
-            # then add to our set of return values
-
-            # first half:
-            originator_code = (first_half_split[1])
-            event_code = (first_half_split[2])
-            location_codes = []
-            for i in range(3, len(first_half_split)):
-                location_codes.append(first_half_split[i])
-
-            # second half:
-            purge_time = (second_half_split[0])
-            exact_time = (second_half_split[1])
-            callsign = (second_half_split[2])
-
-        return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
-
     def get_originator(self):
         return self.get_SAME_message()[0][1:4]
 
@@ -387,7 +320,271 @@ class SAMEMessage(CommonMessage):
             "time": self.start_time
         }
 
+# split message into component parts according to SAME protocol
+# EXAMPLE:
+# format: -<Originator>-<Event>-<Locations>-<Purge Time>-<Timestamp>-<Call Sign>
+# clean message: -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
+# dirty message: -WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\'ÎWS-
 
+# regex patterns:
+# TODO: add these to the init section at the top of this file
+
+# takes a list of codes and a list of valid codes, and checks to make sure most of the codes correspond to a valid list
+# e.g. if we have a list of ['WXR', 'W^X', 'WXR'] we should get the result that this is a valid originator code
+
+
+def split_message(message, confidences):
+
+    # first, truncate the message
+    message = _truncate(message, confidences)[0]
+
+    # init
+    # this is what we want to use to initially split up the message, we expect this to be a '+'
+    # _truncate will always give us a message with 22 chars after the delimiter, therefore we want the character
+    # right before that set of chars (i.e. the delimiter itself)
+    main_delimiter = message[len(message)-23]
+    originator_code = ''
+    event_code = ''
+    location_codes = []
+    purge_time = ''
+    exact_time = ''
+    callsign = ''
+
+    '''
+    '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
+    "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
+    '/WXR-ZWT-020±03-22020\x19-06°091-121121-°2904?/229145-p2909%-029037+0830-30;57 0mËEAXoNWS-'
+    '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
+    "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
+    '''
+
+    # start splitting!
+    # we want to split this based on length, not nearby chars (since those chars can be unreliable)
+    # so: the plus has to be after a group of at least 15 chars, and after groups of +7 after that
+
+    # shortest possible SAME message (1 county code)
+    # len = 38
+    # "-WXR-SVR-037085+0100-1250217-KRAH/NWS-"
+
+    # longest possible SAME message (31 county code)
+    # len = 248
+
+    # the end sequence is always a length of 22, not counting the '+'
+    # this means that assuming our _truncate function works as intended, our delimiter should ALWAYS be
+    # at message[:-22]
+
+    main_delimiter_split = message.split(main_delimiter)
+
+    if len(main_delimiter_split) == 2:
+        # split up to (and including) location codes
+        first_half_split = main_delimiter_split[0].split('-')
+        # everything after location codes
+        second_half_split = main_delimiter_split[1].split('-')
+        # 0030-3031710,KEAX\\'ÎWS-
+
+        # check to make sure we're getting the formats we expect for individual chunks of the message
+        # then add to our set of return values
+
+        # first half:
+        originator_code = (first_half_split[1])
+        event_code = (first_half_split[2])
+        location_codes = []
+        for i in range(3, len(first_half_split)):
+            location_codes.append(first_half_split[i])
+
+        # second half:
+        purge_time = (second_half_split[0])
+        exact_time = (second_half_split[1])
+        callsign = (second_half_split[2])
+
+    return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
+
+def average_message(self, transmitter):
+    """
+    Compute the correct message by averaging headers, restricting input to the valid character set, and filling
+    in expected values when it's unambiguous based on other parts of the message.
+
+    :param headers: an array of tuples, each containing a string message and an array (or string) of confidence values.
+       The complete message is assumed to be as long as the longest message, and messages align at the start.
+    :return: a tuple containing a single string corresponding to the most certain available data, and
+             the combined confidence for each character (range 1-9)
+    """
+    # This implementation undertakes several steps
+    # 1. Compute the best 2 out of 3 for every bit, weighted by confidence
+    # 2. Compute the confidence of each byte (agreeing confidences - disagreeing confidences)
+    # 3. Figure out what the length is by looking at sentinel characters
+    # 4. Lay down all the sentinel characters
+    # 5. Check that characters are in the valid set for the section of the message
+    # 6. Substitute any low-confidence data with data from the list of possible values
+    # TODO factor this into different functions to do the work and test them separately
+    headers = self.headers
+    size = max([len(x[0]) for x in headers])
+    bitstrue = [0] * 8 * size
+    bitsfalse = [0] * 8 * size
+    confidences = [0] * size
+
+    # final message to return
+    final_msg = ''
+    org_codes = []
+
+    '''
+    # First, check if we have two matching, valid originator codes
+    for (msg, c, when) in headers:
+        split_msg = split_message(msg)
+        # TODO: on testAverageMessage we have a problem: the main delimiter ('+') is interpreted as a ';'.  This needs to be our first line of attack
+        org_codes.append(split_msg[0])
+    valid_code = check_if_valid_code(org_codes, _ORIGINATOR_CODES)
+    # if we have a non-ambiguous valid org code, add it to the final message
+    if valid_code:
+        final_msg += '-' + valid_code
+    # otherwise, we try to construct a valid org code
+    else:
+        possible_char = ''
+        for h in headers:
+            confidence_bits = sum_confidence(h)
+            add_bits(bitstrue, confidence_bits[0])
+            add_bits(bitsfalse, confidence_bits[1])
+            add_bits(confidences, confidence_bits[2])
+        possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
+        print(possible_char)
+    '''
+
+
+
+    # First look through the messages and compute sums of confidence of bit values
+    # TODO: make this into its own function
+    for (msg, c, when) in headers:
+        if type(c) is str:
+            confidence = [int(x) for x in c]
+        else:
+            confidence = c
+        # Loop through the characters of the message
+        # TODO: change this to split on delimiter (use _truncate() for this)
+        for i in range(0, len(msg)):
+            if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
+                # Loop through bits and apply confidence for true or false
+                for j in range(0, 8):
+                    # if the last bit (e.g. 00001) is a 1:
+                    if (ord(msg[i]) >> j) & 1:
+                        # then add it to the bitstrue (or bitsfalse) bits with that bit's confidence level
+                        bitstrue[(i << 3) + j] += 1 * confidence[i]
+                    else:
+                        bitsfalse[(i << 3) + j] += 1 * confidence[i]
+
+
+    # Then combine that information into a single aggregate message
+    avgmsg = []
+    byte_pattern_index = 0
+    for i in range(0, size):
+        # TODO: why is this not using _reconcile_character()?
+        # Assemble a character from the various bits
+        c = 0
+        confidences[i] = 0
+        for j in range(0, 8):
+            bit_weight = (bitstrue[(i << 3) + j] - bitsfalse[(i << 3) + j])
+            c |= (bit_weight > 0) << j
+            confidences[i] += abs(bit_weight)
+            print(bit_weight)
+            print(confidences[i])
+            print(chr(c))
+        if c == 0:
+            confidences[i] = 0
+        avgmsg.append(chr(c))
+
+    # Figure out the length
+    avgmsg, confidences = _truncate(avgmsg, confidences)
+
+    # Check the character against the space of possible characters
+    for i in range(0, len(avgmsg)):
+        c = avgmsg[i]
+        byte_confidence = confidences[i]
+        if False and len(__SAME_CHARS) <= byte_pattern_index:
+            confidences[i] = 0
+        else:
+            pattern = __SAME_CHARS[byte_pattern_index]
+            multipath = None  # Where the pattern can repeat, multipath supports both routes
+            if type(pattern) is int:
+                multipath = pattern
+                pattern = __SAME_CHARS[byte_pattern_index + multipath] + __SAME_CHARS[
+                    byte_pattern_index + 1]
+            if c not in pattern:
+                # That was ugly.  Now find the closest legitimate character
+                byte_confidence, c = _reconcile_character(bitstrue[i * 8:(i + 1) * 8], bitsfalse[i * 8:(i + 1) * 8],
+                                                          pattern)
+                byte_confidence <<= 3  # It will get shifted back in a moment
+            if not multipath:
+                byte_pattern_index += 1
+            else:
+                if c in __SAME_CHARS[byte_pattern_index + 1]:
+                    byte_pattern_index += 2
+                else:
+                    byte_pattern_index += multipath + 1
+
+            avgmsg[i] = c
+        confidences[i] = min(9, byte_confidence >> 3)
+    avgmsg = "".join(avgmsg)
+
+    # Now break the message into its parts and clean up each one
+    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, 1, _ORIGINATOR_CODES)
+    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, 5, _EVENT_CODES)
+
+    # Reconcile FIPS codes (which, in some non-weather types of messages, may not be FIPS)
+    try:
+        candidate_fips = list(get_counties(transmitter))
+    except KeyError:
+        candidate_fips = []
+
+    try:
+        wfo = [get_wfo(transmitter)]
+    except KeyError:
+        wfo = []
+
+    def check_fips(avgmsg, confidences, ixlist):
+        recheck = []
+        matched1 = False
+        for ix in ixlist:
+            avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix - 1, ['-'])
+            avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix,
+                                                           [(1.1, '0'), (1, '1'), (1, '2'), (1, '3'), (1, '4'),
+                                                            (1, '5'), (1, '6'), (1, '7'), (1, '8'), (1, '9')])
+            avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix + 1,
+                                                           list([x[-5:] for x in candidate_fips]))
+            matched1 |= matched
+            if matched:
+                if avgmsg[ix:ix + 6] in candidate_fips:
+                    candidate_fips.remove(avgmsg[ix:ix + 6])
+            else:
+                recheck.append(ix)
+        return avgmsg, confidences, matched1, recheck
+
+    # Check off counties until the maximum number have been reconciled
+    matched = True
+    recheck = range(9, len(avgmsg) - 23, 7)
+    while matched and len(recheck) > 0:
+        avgmsg, confidences, matched, recheck = check_fips(avgmsg, confidences, recheck)
+    # TODO add a modest bias for adjacent counties to resolve ties in bytes
+
+    # Reconcile purge time
+    ix = len(avgmsg) - 23
+    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, ['+'])
+    ix += 1
+    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, VALID_DURATIONS)
+
+    # Reconcile issue time
+    ix += 5
+    valid_times = []
+    for weight, offset in ((.5, -4), (.7, -3), (.9, -2), (1.1, -1), (1, 0)):
+        valid_times.append((weight, time.strftime('%j%H%M', time.gmtime(headers[0][2] + 60 * offset))))
+    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, valid_times)
+
+    # Reconcile the end
+    ix += 8
+    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, wfo)
+
+    ix += 5
+    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, ['NWS'])
+
+    return _unicodify(avgmsg), confidences[0:len(avgmsg)]
 
 def _word_distance(word, confidence, choice, wildcard=None):
     d = 0
@@ -568,21 +765,6 @@ def sum_bits(string):
     confidences = [0] * size
 
 
-# split message into component parts according to SAME protocol
-# EXAMPLE:
-# format: -<Originator>-<Event>-<Locations>-<Purge Time>-<Timestamp>-<Call Sign>
-# clean message: -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
-# dirty message: -WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\'ÎWS-
-
-# regex patterns:
-# TODO: add these to the init section at the top of this file
-
-
-
-# takes a list of codes and a list of valid codes, and checks to make sure most of the codes correspond to a valid list
-# e.g. if we have a list of ['WXR', 'W^X', 'WXR'] we should get the result that this is a valid originator code
-
-
 def check_if_valid_code(codes, valid_list):
     code_list = []
     # Check if we have two matching and valid codes
@@ -605,192 +787,6 @@ def add_bits(to_list, from_list):
         count += 1
     return to_list
 
-
-def average_message(headers, transmitter):
-    """
-    Compute the correct message by averaging headers, restricting input to the valid character set, and filling
-    in expected values when it's unambiguous based on other parts of the message.
-
-    :param headers: an array of tuples, each containing a string message and an array (or string) of confidence values.
-       The complete message is assumed to be as long as the longest message, and messages align at the start.
-    :return: a tuple containing a single string corresponding to the most certain available data, and
-             the combined confidence for each character (range 1-9)
-    """
-    # This implementation undertakes several steps
-    # 1. Compute the best 2 out of 3 for every bit, weighted by confidence
-    # 2. Compute the confidence of each byte (agreeing confidences - disagreeing confidences)
-    # 3. Figure out what the length is by looking at sentinel characters
-    # 4. Lay down all the sentinel characters
-    # 5. Check that characters are in the valid set for the section of the message
-    # 6. Substitute any low-confidence data with data from the list of possible values
-    # TODO factor this into different functions to do the work and test them separately
-    size = max([len(x[0]) for x in headers])
-    bitstrue = [0] * 8 * size
-    bitsfalse = [0] * 8 * size
-    confidences = [0] * size
-
-    # final message to return
-    final_msg = ''
-    org_codes = []
-
-    '''
-    # First, check if we have two matching, valid originator codes
-    for (msg, c, when) in headers:
-        split_msg = split_message(msg)
-        # TODO: on testAverageMessage we have a problem: the main delimiter ('+') is interpreted as a ';'.  This needs to be our first line of attack
-        org_codes.append(split_msg[0])
-    valid_code = check_if_valid_code(org_codes, _ORIGINATOR_CODES)
-    # if we have a non-ambiguous valid org code, add it to the final message
-    if valid_code:
-        final_msg += '-' + valid_code
-    # otherwise, we try to construct a valid org code
-    else:
-        possible_char = ''
-        for h in headers:
-            confidence_bits = sum_confidence(h)
-            add_bits(bitstrue, confidence_bits[0])
-            add_bits(bitsfalse, confidence_bits[1])
-            add_bits(confidences, confidence_bits[2])
-        possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
-        print(possible_char)
-    '''
-
-
-
-    # First look through the messages and compute sums of confidence of bit values
-    # TODO: make this into its own function
-    for (msg, c, when) in headers:
-        if type(c) is str:
-            confidence = [int(x) for x in c]
-        else:
-            confidence = c
-        # Loop through the characters of the message
-        # TODO: change this to split on delimiter (use _truncate() for this)
-        for i in range(0, len(msg)):
-            if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
-                # Loop through bits and apply confidence for true or false
-                for j in range(0, 8):
-                    # if the last bit (e.g. 00001) is a 1:
-                    if (ord(msg[i]) >> j) & 1:
-                        # then add it to the bitstrue (or bitsfalse) bits with that bit's confidence level
-                        bitstrue[(i << 3) + j] += 1 * confidence[i]
-                    else:
-                        bitsfalse[(i << 3) + j] += 1 * confidence[i]
-
-
-    # Then combine that information into a single aggregate message
-    avgmsg = []
-    byte_pattern_index = 0
-    for i in range(0, size):
-        # TODO: why is this not using _reconcile_character()?
-        # Assemble a character from the various bits
-        c = 0
-        confidences[i] = 0
-        for j in range(0, 8):
-            bit_weight = (bitstrue[(i << 3) + j] - bitsfalse[(i << 3) + j])
-            c |= (bit_weight > 0) << j
-            confidences[i] += abs(bit_weight)
-            print(bit_weight)
-            print(confidences[i])
-            print(chr(c))
-        if c == 0:
-            confidences[i] = 0
-        avgmsg.append(chr(c))
-
-    # Figure out the length
-    avgmsg, confidences = _truncate(avgmsg, confidences)
-
-    # Check the character against the space of possible characters
-    for i in range(0, len(avgmsg)):
-        c = avgmsg[i]
-        byte_confidence = confidences[i]
-        if False and len(__SAME_CHARS) <= byte_pattern_index:
-            confidences[i] = 0
-        else:
-            pattern = __SAME_CHARS[byte_pattern_index]
-            multipath = None  # Where the pattern can repeat, multipath supports both routes
-            if type(pattern) is int:
-                multipath = pattern
-                pattern = __SAME_CHARS[byte_pattern_index + multipath] + __SAME_CHARS[
-                    byte_pattern_index + 1]
-            if c not in pattern:
-                # That was ugly.  Now find the closest legitimate character
-                byte_confidence, c = _reconcile_character(bitstrue[i * 8:(i + 1) * 8], bitsfalse[i * 8:(i + 1) * 8],
-                                                          pattern)
-                byte_confidence <<= 3  # It will get shifted back in a moment
-            if not multipath:
-                byte_pattern_index += 1
-            else:
-                if c in __SAME_CHARS[byte_pattern_index + 1]:
-                    byte_pattern_index += 2
-                else:
-                    byte_pattern_index += multipath + 1
-
-            avgmsg[i] = c
-        confidences[i] = min(9, byte_confidence >> 3)
-    avgmsg = "".join(avgmsg)
-
-    # Now break the message into its parts and clean up each one
-    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, 1, _ORIGINATOR_CODES)
-    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, 5, _EVENT_CODES)
-
-    # Reconcile FIPS codes (which, in some non-weather types of messages, may not be FIPS)
-    try:
-        candidate_fips = list(get_counties(transmitter))
-    except KeyError:
-        candidate_fips = []
-
-    try:
-        wfo = [get_wfo(transmitter)]
-    except KeyError:
-        wfo = []
-
-    def check_fips(avgmsg, confidences, ixlist):
-        recheck = []
-        matched1 = False
-        for ix in ixlist:
-            avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix - 1, ['-'])
-            avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix,
-                                                           [(1.1, '0'), (1, '1'), (1, '2'), (1, '3'), (1, '4'),
-                                                            (1, '5'), (1, '6'), (1, '7'), (1, '8'), (1, '9')])
-            avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix + 1,
-                                                           list([x[-5:] for x in candidate_fips]))
-            matched1 |= matched
-            if matched:
-                if avgmsg[ix:ix + 6] in candidate_fips:
-                    candidate_fips.remove(avgmsg[ix:ix + 6])
-            else:
-                recheck.append(ix)
-        return avgmsg, confidences, matched1, recheck
-
-    # Check off counties until the maximum number have been reconciled
-    matched = True
-    recheck = range(9, len(avgmsg) - 23, 7)
-    while matched and len(recheck) > 0:
-        avgmsg, confidences, matched, recheck = check_fips(avgmsg, confidences, recheck)
-    # TODO add a modest bias for adjacent counties to resolve ties in bytes
-
-    # Reconcile purge time
-    ix = len(avgmsg) - 23
-    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, ['+'])
-    ix += 1
-    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, VALID_DURATIONS)
-
-    # Reconcile issue time
-    ix += 5
-    valid_times = []
-    for weight, offset in ((.5, -4), (.7, -3), (.9, -2), (1.1, -1), (1, 0)):
-        valid_times.append((weight, time.strftime('%j%H%M', time.gmtime(headers[0][2] + 60 * offset))))
-    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, valid_times)
-
-    # Reconcile the end
-    ix += 8
-    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, wfo)
-
-    ix += 5
-    avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, ['NWS'])
-
-    return _unicodify(avgmsg), confidences[0:len(avgmsg)]
 
 # -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
 SAME_PATTERN = re.compile('-(EAS|CIV|WXR|PEP)-([A-Z]{3})((?:-\\d{6})+)\\+(\\d{4})-(\\d{7})-([A-Z/]+)-?')
