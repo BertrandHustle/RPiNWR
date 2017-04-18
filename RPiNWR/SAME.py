@@ -380,16 +380,7 @@ def split_message(message, confidences):
 
 # takes headers and computes sums of confidence of bit values
 # TODO: rename this
-def sum_confidence(headers):
-    # size of message
-    size = max([len(x[0]) for x in headers])
-    bitstrue = [0] * 8 * size
-    bitsfalse = [0] * 8 * size
-    # summed confidences
-    confidences = [0] * size
-    # msg == message
-    # c == confidence
-    # when == time stamp (after the epoch)
+def sum_confidence(bitstrue, bitsfalse, headers):
     for (msg, c, when) in headers:
         # convert to int if c is a string
         if type(c) is str:
@@ -452,36 +443,20 @@ def average_message(headers, transmitter):
     # final message to return
     final_msg = ''
 
+    # an array containing the split messages
+    split_messages = []
+    for (msg, c, when) in headers:
+        split_messages.append(split_message(msg))
+
     # First look through the messages and compute sums of confidence of bit values
     # TODO: make this into its own function
 
-    # sum_confidence(headers)
-
-    '''
-    for (msg, c, when) in headers:
-        if type(c) is str:
-            confidence = [int(x) for x in c]
-        else:
-            confidence = c
-        # Loop through the characters of the message
-        # TODO: change this to split on delimiter (use _truncate() for this)
-        for i in range(0, len(msg)):
-            if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
-                # Loop through bits and apply confidence for true or false
-                for j in range(0, 8):
-                    # if the last bit (e.g. 00001) is a 1:
-                    if (ord(msg[i]) >> j) & 1:
-                        # then add it to the bitstrue (or bitsfalse) bits with that bit's confidence level
-                        bitstrue[(i << 3) + j] += 1 * confidence[i]
-                    else:
-                        bitsfalse[(i << 3) + j] += 1 * confidence[i]
-    '''
+    sum_confidence(bitstrue, bitsfalse, headers)
 
     # Then combine that information into a single aggregate message
     avgmsg = []
     byte_pattern_index = 0
     for i in range(0, size):
-        # TODO: why is this not using _reconcile_character()?
         # Assemble a character from the various bits
         c = 0
         confidences[i] = 0
@@ -524,7 +499,8 @@ def average_message(headers, transmitter):
                     byte_pattern_index += 2
                 else:
                     byte_pattern_index += multipath + 1
-            avgmsg[i] = c
+            # avgmsg[i] = c
+            mutate_string(avgmsg, i, c)
         confidences[i] = min(9, byte_confidence >> 3)
     avgmsg = "".join(avgmsg)
 
