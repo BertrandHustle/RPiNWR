@@ -459,10 +459,16 @@ class TestSAME(unittest.TestCase):
         self.assertTrue(SAME.check_if_valid_code(test_codes, test_valid_list))
         self.assertFalse(SAME.check_if_valid_code(test_codes_2, test_valid_list))
 
-    def test_add_bits(self):
-        to_list = [0, 0, 0, 0, 0]
-        from_list = [1, 1, 0, 1, 1]
-        self.assertEqual(SAME.add_bits(to_list, from_list), from_list)
+    def test_mutate_string(self):
+        # setup
+        test_string = 'string'
+        expected_result = '$tring'
+
+        # test
+        test_mutate_string = SAME.mutate_string(test_string, 0, '$')
+
+        # assert
+        self.assertEqual(test_mutate_string, expected_result)
 
     def test__truncate(self):
 
@@ -489,12 +495,14 @@ class TestSAME(unittest.TestCase):
                      '/WXR-ZWT-020±03-22020\x19-06°091-121121-°2904?/229145-p2909%-029037+0830-30;57 0mËEAXoNWS-',
                      '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-',
                      "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"]
+        '''
         for i in test_list:
             noisy = self.add_noise(i, 0)
             truncated = SAME._truncate(noisy[0], noisy[1])
             print(truncated)
+        '''
 
-    # strip out just the message string from the tuple of transmitter, confidences, message
+        # strip out just the message string from the tuple of transmitter, confidences, message
         test_avgmsg = [i for i in test_msg[1][1][0]]
         test_avgmsg_2 = [i for i in test_msg_2[1][1][0]]
         test_avgmsg_long = [i for i in test_msg_long[0]]
@@ -517,6 +525,8 @@ class TestSAME(unittest.TestCase):
         '''
 
         # assert
+        print(''.join(test_truncate[0]))
+        print(test_truncate[0])
         self.assertEqual(''.join(test_truncate[0]), expected_message)
         self.assertEqual(''.join(test_truncate_2[0]), expected_message_2)
         self.assertEqual(''.join(test_truncate_long[0]), expected_message_long)

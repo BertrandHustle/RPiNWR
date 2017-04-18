@@ -350,29 +350,7 @@ def split_message(message, confidences):
     exact_time = ''
     callsign = ''
 
-    '''
-    '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
-    "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
-    '/WXR-ZWT-020±03-22020\x19-06°091-121121-°2904?/229145-p2909%-029037+0830-30;57 0mËEAXoNWS-'
-    '-WXR-RwVm03090;-0202p1-020091-02012\x11-02= <3-\x1029145-02)195-029037+0030-;0³170p-OGAX/FWS-'
-    "-GYR-RWT-02010³-021209-020891-°20121-029047-129165%029095-02¹037;\x100\x130-\x13031710,KE@X'ÎWS-"
-    '''
-
     # start splitting!
-    # we want to split this based on length, not nearby chars (since those chars can be unreliable)
-    # so: the plus has to be after a group of at least 15 chars, and after groups of +7 after that
-
-    # shortest possible SAME message (1 county code)
-    # len = 38
-    # "-WXR-SVR-037085+0100-1250217-KRAH/NWS-"
-
-    # longest possible SAME message (31 county code)
-    # len = 248
-
-    # the end sequence is always a length of 22, not counting the '+'
-    # this means that assuming our _truncate function works as intended, our delimiter should ALWAYS be
-    # at message[:-22]
-
     main_delimiter_split = message.split(main_delimiter)
 
     if len(main_delimiter_split) == 2:
@@ -399,7 +377,56 @@ def split_message(message, confidences):
 
     return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
 
-def average_message(self, transmitter):
+
+# takes headers and computes sums of confidence of bit values
+# TODO: rename this
+def sum_confidence(headers):
+    # size of message
+    size = max([len(x[0]) for x in headers])
+    bitstrue = [0] * 8 * size
+    bitsfalse = [0] * 8 * size
+    # summed confidences
+    confidences = [0] * size
+    # msg == message
+    # c == confidence
+    # when == time stamp (after the epoch)
+    for (msg, c, when) in headers:
+        # convert to int if c is a string
+        if type(c) is str:
+            confidence = [int(x) for x in c]
+        # otherwise leave it as a list of ints
+        else:
+            confidence = c
+        # Loop through the characters of the message
+        for i in range(0, len(msg)):
+            if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
+                # Loop through bits and apply confidence for true or false
+                for j in range(0, 8):
+                    # if the last bit (e.g. 00001) is a 1:
+                    if (ord(msg[i]) >> j) & 1:
+                        # then add it to the bitstrue (or bitsfalse) bits with that bit's confidence level
+                        bitstrue[(i << 3) + j] += 1 * confidence[i]
+                    else:
+                        bitsfalse[(i << 3) + j] += 1 * confidence[i]
+    # return 1 if successful
+    return 1
+
+
+# faux-mutates a string by transforming it into a list, making changes, and casting it back to a string
+def mutate_string(str, old_char, new_char):
+    """
+    :param str: string to "mutate"
+    :param old_char: an int representing the index of the char which we want to change
+    :param new_char: a char, this is what we want to change the old_char to
+    """
+    listmsg = list(str)
+    listmsg[old_char] = new_char
+    # new_str is what we're returning as the result of our mutation
+    new_str = ''.join(listmsg)
+    return new_str
+
+
+def average_message(headers, transmitter):
     """
     Compute the correct message by averaging headers, restricting input to the valid character set, and filling
     in expected values when it's unambiguous based on other parts of the message.
@@ -417,7 +444,6 @@ def average_message(self, transmitter):
     # 5. Check that characters are in the valid set for the section of the message
     # 6. Substitute any low-confidence data with data from the list of possible values
     # TODO factor this into different functions to do the work and test them separately
-    headers = self.headers
     size = max([len(x[0]) for x in headers])
     bitstrue = [0] * 8 * size
     bitsfalse = [0] * 8 * size
@@ -425,34 +451,13 @@ def average_message(self, transmitter):
 
     # final message to return
     final_msg = ''
-    org_codes = []
-
-    '''
-    # First, check if we have two matching, valid originator codes
-    for (msg, c, when) in headers:
-        split_msg = split_message(msg)
-        # TODO: on testAverageMessage we have a problem: the main delimiter ('+') is interpreted as a ';'.  This needs to be our first line of attack
-        org_codes.append(split_msg[0])
-    valid_code = check_if_valid_code(org_codes, _ORIGINATOR_CODES)
-    # if we have a non-ambiguous valid org code, add it to the final message
-    if valid_code:
-        final_msg += '-' + valid_code
-    # otherwise, we try to construct a valid org code
-    else:
-        possible_char = ''
-        for h in headers:
-            confidence_bits = sum_confidence(h)
-            add_bits(bitstrue, confidence_bits[0])
-            add_bits(bitsfalse, confidence_bits[1])
-            add_bits(confidences, confidence_bits[2])
-        possible_char += construct_character(bitstrue, bitsfalse, confidences, size)
-        print(possible_char)
-    '''
-
-
 
     # First look through the messages and compute sums of confidence of bit values
     # TODO: make this into its own function
+
+    # sum_confidence(headers)
+
+    '''
     for (msg, c, when) in headers:
         if type(c) is str:
             confidence = [int(x) for x in c]
@@ -470,7 +475,7 @@ def average_message(self, transmitter):
                         bitstrue[(i << 3) + j] += 1 * confidence[i]
                     else:
                         bitsfalse[(i << 3) + j] += 1 * confidence[i]
-
+    '''
 
     # Then combine that information into a single aggregate message
     avgmsg = []
@@ -519,7 +524,6 @@ def average_message(self, transmitter):
                     byte_pattern_index += 2
                 else:
                     byte_pattern_index += multipath + 1
-
             avgmsg[i] = c
         confidences[i] = min(9, byte_confidence >> 3)
     avgmsg = "".join(avgmsg)
@@ -585,6 +589,7 @@ def average_message(self, transmitter):
     avgmsg, confidences, matched = _reconcile_word(avgmsg, confidences, ix, ['NWS'])
 
     return _unicodify(avgmsg), confidences[0:len(avgmsg)]
+
 
 def _word_distance(word, confidence, choice, wildcard=None):
     d = 0
@@ -696,73 +701,12 @@ def _truncate(avgmsg, confidences):
     for i in range(0, len(avgmsg)):
         if frame[i] != '_':
             if avgmsg[i] != frame[i]:
-                listmsg = list(avgmsg)
-                listmsg[i] = frame[i]
-                avgmsg = ''.join(listmsg)
+                avgmsg = mutate_string(avgmsg, i, frame[i])
                 confidences[i] = end_confidence
             else:
                 confidences[i] = max(end_confidence, confidences[i])
 
     return avgmsg, confidences
-
-
-# takes headers and computes sums of confidence of bit values
-# TODO: rename this
-def sum_confidence(header):
-
-    # size of message
-    size = max([len(x[0]) for x in header])
-    bitstrue = [0] * 8 * size
-    bitsfalse = [0] * 8 * size
-
-    # summed confidences
-    confidences = [0] * size
-
-    # msg == message
-    # c == confidence
-    # when == time stamp (after the epoch)
-    # TODO: why is this line not working in tests?
-    for (msg, c, when) in header:
-        # convert to int if c is a string
-        if type(c) is str:
-            confidence = [int(x) for x in c]
-        # otherwise leave it as a list of ints
-        else:
-            confidence = c
-        # Loop through the characters of the message
-        for i in range(0, len(msg)):
-            if ord(msg[i]):  # null characters don't count b/c they indicate no data, not all 0 bits
-                # Loop through bits and apply confidence for true or false
-                for j in range(0, 8):
-                    # TODO: this could be improved: since a true bit in bitstrue is ALWAYS a 0 in bitsfalse, why not just create bitsfalse by mirroring bitstrue?
-
-                    '''
-                    e.g.
-                    00999900090
-                    99000099909
-
-                    we'd run into problems when we changed numbers, e.g.
-                    009|80
-                    990|08
-                    '''
-                    # if the last bit (e.g. 00001) is a 1:
-                    if (ord(msg[i]) >> j) & 1:
-                        # then add it to the bitstrue (or bitsfalse) bits with that bit's confidence level
-                        bitstrue[(i << 3) + j] += 1 * confidence[i]
-                    else:
-                        bitsfalse[(i << 3) + j] += 1 * confidence[i]
-    print(bitstrue)
-    print(bitsfalse)
-    return bitstrue, bitsfalse, confidences
-
-
-# convert string to bitstrue, bitsfalse, and confidences
-def sum_bits(string):
-    # size of message
-    size = len(string)
-    bitstrue = [0] * 8 * size
-    bitsfalse = [0] * 8 * size
-    confidences = [0] * size
 
 
 def check_if_valid_code(codes, valid_list):
@@ -774,18 +718,6 @@ def check_if_valid_code(codes, valid_list):
             return c
         else:
             code_list.append(c)
-
-
-# :param to_list: the list we are adding bits to
-# :param from_list: the list we are taking bits from
-
-
-def add_bits(to_list, from_list):
-    count = 0
-    for i in from_list:
-        to_list[count] += i
-        count += 1
-    return to_list
 
 
 # -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
