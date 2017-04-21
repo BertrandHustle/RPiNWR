@@ -326,22 +326,21 @@ class SAMEMessage(CommonMessage):
 # clean message: -WXR-TOR-039173-039051-139069+0030-1591829-KCLE/NWS
 # dirty message: -WXR-RWT-020103-020209-020091-°20121-029047-029165%029095-029037;0030-3031710,KEAX\\'ÎWS-
 
-# regex patterns:
-# TODO: add these to the init section at the top of this file
 
-# takes a list of codes and a list of valid codes, and checks to make sure most of the codes correspond to a valid list
-# e.g. if we have a list of ['WXR', 'W^X', 'WXR'] we should get the result that this is a valid originator code
-
-
+# TODO: make this return confidences as well as characters
 def split_message(message, confidences):
 
-    # first, truncate the message
-    message = _truncate(message, confidences)[0]
+    # first, truncate the message and separate message and confidences
+    truncated_message = _truncate(message, confidences)
+    message = truncated_message[0]
+    confidences = truncated_message[1]
 
     # init
     # this is what we want to use to initially split up the message, we expect this to be a '+'
     # _truncate will always give us a message with 22 chars after the delimiter, therefore we want the character
     # right before that set of chars (i.e. the delimiter itself)
+
+    # component parts of message
     main_delimiter = message[len(message)-23]
     originator_code = ''
     event_code = ''
@@ -375,7 +374,35 @@ def split_message(message, confidences):
         exact_time = (second_half_split[1])
         callsign = (second_half_split[2])
 
-    return [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
+    final_message = [originator_code, event_code, location_codes, purge_time, exact_time, callsign]
+    final_confidences = []
+
+    # align confidences with message parts
+    count = 0
+    for part in final_message:
+        # this is the "chunk" of confidences we align with each message part
+        con_set = []
+        # this is the array that contains arrays of location code confidences
+        location_con_set = []
+        # this is to handle location codes, since they are in their own array
+        if type(part) == list:
+            for member in part:
+                # TODO: fix this terrible variable name
+                this_location_array = []
+                for char in member:
+                    this_location_array.append(confidences[count])
+                    count += 1
+                location_con_set.append(this_location_array)
+            final_confidences.append(location_con_set)
+        else:
+            for char in part:
+                con_set.append(confidences[count])
+                count += 1
+            final_confidences.append(con_set)
+        # empty out con_set
+        con_set = []
+
+    return [final_message, final_confidences]
 
 
 # takes headers and computes sums of confidence of bit values
@@ -443,13 +470,11 @@ def average_message(headers, transmitter):
     # final message to return
     final_msg = ''
 
-    # an array containing the split messages
-    split_messages = []
-    for (msg, c, when) in headers:
-        split_messages.append(split_message(msg))
+    # TODO: start dealing with component message parts here
+    # for (msg, c, when) in headers:
+    #   msg = split_message(msg, c)
 
     # First look through the messages and compute sums of confidence of bit values
-    # TODO: make this into its own function
 
     sum_confidence(bitstrue, bitsfalse, headers)
 
@@ -683,6 +708,10 @@ def _truncate(avgmsg, confidences):
                 confidences[i] = max(end_confidence, confidences[i])
 
     return avgmsg, confidences
+
+
+# takes a list of codes and a list of valid codes, and checks to make sure most of the codes correspond to a valid list
+# e.g. if we have a list of ['WXR', 'W^X', 'WXR'] we should get the result that this is a valid originator code
 
 
 def check_if_valid_code(codes, valid_list):

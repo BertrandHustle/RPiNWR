@@ -441,16 +441,21 @@ class TestSAME(unittest.TestCase):
         input_confidences_2 = [0]*len(input_msg_2)
 
         # expected values
-        expected_list = ['WXR', 'SVR', ['037085', '037101'], '0100', '1250218', 'KRAH/NWS']
-        expected_list_2 = ['WXR', 'RWT', ['020103', '020209', '020091', '°20121', '029047', '029165', '029095', '029037',], '0030', '3031710', 'KEAX/NWS']
+        expected_result = [['WXR', 'SVR', ['037085', '037101'], '0100', '1250218', 'KRAH/NWS'],
+                           [[0, 0, 0], [0, 0, 0], [[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]], [0, 0, 0, 0],
+                            [0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]]
+        expected_result_2 = [['WXR', 'RWT', ['020103', '020209', '020091', '°20121', '029047', '029165', '029095', '029037',], '0030', '3031710', 'KEAX/NWS'],
+                             [[0, 0, 0], [0, 0, 0], [[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]], [0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]]
 
         # test
         test_msg = SAME.split_message(input_msg, input_confidences)
         test_msg_2 = SAME.split_message(input_msg_2, input_confidences_2)
 
         # assert
-        self.assertEqual(test_msg, expected_list)
-        self.assertEqual(test_msg_2, expected_list_2)
+        self.assertEqual(test_msg, expected_result)
+        self.assertEqual(test_msg_2, expected_result_2)
 
     def test_check_if_valid_code(self):
         test_codes = ['WXR', 'W^X', 'WXR']
